@@ -11,7 +11,7 @@
     <!-- RIGHT SIDE -->
     <div class="right-side">
 
-      <!-- TOP ROW: utility links -->
+      <!-- TOP ROW -->
       <div class="top-row">
         <a href="network.html" class="btn-top">Find Agency</a>
         <a href="contact.html" class="btn-top">Contact Us</a>
@@ -19,12 +19,12 @@
 
       <hr class="top-divider"/>
 
-      <!-- BOTTOM ROW: nav + icons -->
+      <!-- BOTTOM ROW -->
       <div class="bottom-row">
 
         <!-- DESKTOP NAV -->
         <ul class="nav-links">
-          <li><a href="index.html"   class="nav-link" data-page="index">Home</a></li>
+          <li><a href="index.html" class="nav-link" data-page="index">Home</a></li>
 
           <li class="dropdown">
             <a href="products.html" class="nav-link" data-page="products">
@@ -54,7 +54,7 @@
           <li><a href="contact.html" class="nav-link" data-page="contact">Contact</a></li>
         </ul>
 
-        <!-- ICON AREA: hamburger · search · language -->
+        <!-- ICONS: hamburger · search · language -->
         <div class="nav-icons">
 
           <!-- Hamburger (mobile only) -->
@@ -65,9 +65,9 @@
                   aria-controls="mobileNav">
             <svg width="20" height="20" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24">
-              <line x1="3" y1="6"  x2="21" y2="6"/>
-              <line x1="3" y1="12" x2="21" y2="12"/>
-              <line x1="3" y1="18" x2="21" y2="18"/>
+              <line x1="3"  y1="6"  x2="21" y2="6"/>
+              <line x1="3"  y1="12" x2="21" y2="12"/>
+              <line x1="3"  y1="18" x2="21" y2="18"/>
             </svg>
           </button>
 
@@ -80,7 +80,7 @@
             </svg>
           </button>
 
-          <!-- Language dropdown -->
+          <!-- Language -->
           <div class="lang-dropdown" id="langDropdown">
             <button class="icon-btn lang-toggle-btn"
                     id="langToggleBtn"
@@ -94,22 +94,20 @@
                 <path d="M2 4l4 4 4-4"/>
               </svg>
             </button>
-
-            <!-- ↓ This is the element the JS and CSS look for -->
             <ul class="lang-dropdown-menu" id="langDropdownMenu" role="listbox">
               <li><a href="#" data-lang="FR"   role="option">Français (FR)</a></li>
               <li><a href="#" data-lang="ANG"  role="option">English (ANG)</a></li>
               <li><a href="#" data-lang="ARAB" role="option">عربي (ARAB)</a></li>
             </ul>
-          </div><!-- /.lang-dropdown -->
+          </div>
 
         </div><!-- /.nav-icons -->
       </div><!-- /.bottom-row -->
     </div><!-- /.right-side -->
   </div><!-- /.header-inner -->
 
-  <!-- SEARCH BAR (hidden until toggled) -->
-  <div class="search-bar" id="searchBar" role="search">
+  <!-- SEARCH BAR (caché par défaut) -->
+  <div class="search-bar" id="searchBar" role="search" aria-hidden="true">
     <input type="text"
            class="hdr-search-input"
            id="searchInput"
@@ -121,20 +119,20 @@
 
 </header><!-- /#caar-header -->
 
-<!-- ─── MOBILE DRAWER (lives outside <header> so it can cover full viewport) ─── -->
+<!-- MOBILE DRAWER -->
 <div class="mobile-nav-overlay" id="mobileNavOverlay" aria-hidden="true"></div>
 
-<nav class="mobile-nav" id="mobileNav" aria-label="Mobile navigation">
+<nav class="mobile-nav" id="mobileNav" aria-label="Mobile navigation" aria-hidden="true">
   <div class="mobile-nav-header">
     <span class="mobile-nav-title">Menu</span>
     <button class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
   </div>
-  <a href="index.html"          data-page="index">Home</a>
-  <a href="products.html"       data-page="products">Products</a>
-  <a href="company.html"        data-page="company">Company</a>
-  <a href="network.html"        data-page="network">Network</a>
-  <a href="news.html"           data-page="news">News</a>
-  <a href="contact.html"        data-page="contact">Contact</a>
+  <a href="index.html"    data-page="index">Home</a>
+  <a href="products.html" data-page="products">Products</a>
+  <a href="company.html"  data-page="company">Company</a>
+  <a href="network.html"  data-page="network">Network</a>
+  <a href="news.html"     data-page="news">News</a>
+  <a href="contact.html"  data-page="contact">Contact</a>
   <div class="mobile-nav-btns">
     <a href="network.html" class="btn-top">Find Agency</a>
     <a href="contact.html" class="btn-top">Contact Us</a>
