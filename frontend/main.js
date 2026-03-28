@@ -1,3 +1,38 @@
+/* ============================================================
+   CAAR — main.js  (v8 — Bug-fixed)
+
+   FIXES IN THIS VERSION
+   ─────────────────────
+   1. Lang dropdown: now calls openLang/closeLang via button click.
+      The CSS (header.css) uses visibility/opacity not display:none,
+      so transitions work correctly.
+
+   2. Mobile nav lag: JS now only toggles classes. CSS uses
+      transform:translateX instead of right (composited, no layout).
+
+   3. Search not opening: removed the inline-script workaround that
+      was in catnat-subscription.html which bound to #searchBtn
+      BEFORE the async fetch completed, throwing a TypeError.
+      initHeader() is now the ONLY place these listeners live.
+
+   ARCHITECTURE
+   ─────────────
+   • Fetches components/header.html into #site-header
+   • Calls initHeader() ONCE after HTML is in DOM
+   • window.__caarHeaderReady guards against double-run
+   • All header interaction lives here — no page should re-bind
+     header elements in its own <script> block
+
+   CSS CLASSES MANAGED
+   ────────────────────
+   .search-bar.open              → search input visible
+   .lang-dropdown-menu.show      → language menu visible
+   .mobile-nav.open              → drawer slides in
+   .mobile-nav-overlay.open      → dark backdrop visible
+   .lang-dropdown.lang-open      → chevron rotates (CSS-only)
+   .dropdown.touch-open          → desktop submenu on touch
+   ============================================================ */
+
 (function () {
   'use strict';
 
@@ -366,12 +401,13 @@
 (function () {
   'use strict';
 
-  /* ── Guard global ── */
-  if (window.__caarAppReady) return;
-  window.__caarAppReady = true;
+  /* ── Guard contre double-exécution ── */
+  if (window.__caarReady) return;
 
   /* ════════════════════════════════════════════
-     UTIL — resolve base path
+     UTIL — résoudre le chemin de base depuis
+     le src du script (fonctionne peu importe
+     le sous-dossier où se trouve la page)
   ════════════════════════════════════════════ */
   function resolveBase() {
     var scripts = document.querySelectorAll('script[src]');
@@ -381,58 +417,185 @@
         return s.replace(/js\/main\.js.*$/, '');
       }
     }
+    /* Fallback */
     return window.location.pathname.slice(
-      0,
-      window.location.pathname.lastIndexOf('/') + 1
+      0, window.location.pathname.lastIndexOf('/') + 1
     );
   }
 
   /* ════════════════════════════════════════════
-     ACTIVE NAV
+     ACTIVE NAV — met .active sur le bon lien
+     selon la page courante
   ════════════════════════════════════════════ */
   var PAGE_MAP = {
-    'index': 'index',
-    '': 'index',
-    'products': 'products',
-    'individual-risks': 'products',
-    'auto-insurance': 'products',
+    'index'              : 'index',
+    ''                   : 'index',
+    'products'           : 'products',
+    'individual-risks'   : 'products',
+    'auto-insurance'     : 'products',
     'transport-insurance': 'products',
-    'technical-risks': 'products',
-    'industrial-risks': 'products',
+    'technical-risks'    : 'products',
+    'industrial-risks'   : 'products',
     'Online_subscription': 'products',
     'catnat-subscription': 'products',
-    'roads': 'products',
-    'company': 'company',
-    'company-careers': 'company',
-    'company-leadership': 'company',
-    'network': 'network',
-    'news': 'news',
-    'article-accident': 'news',
-    'article-home': 'news',
-    'article-business': 'news',
-    'article-basics': 'news',
-    'contact': 'contact'
+    'roads'              : 'products',
+    'company'            : 'company',
+    'company-careers'    : 'company',
+    'company-leadership' : 'company',
+    'network'            : 'network',
+    'news'               : 'news',
+    'article-accident'   : 'news',
+    'article-home'       : 'news',
+    'article-business'   : 'news',
+    'article-basics'     : 'news',
+    'contact'            : 'contact'
   };
 
   function setActiveNav() {
-    var file = window.location.pathname
-      .split('/')
-      .pop()
-      .replace('.html', '') || '';
-
+    var file = window.location.pathname.split('/').pop().replace('.html', '') || '';
     var page = PAGE_MAP[file] || '';
     if (!page) return;
-
     document.querySelectorAll('[data-page]').forEach(function (el) {
-      el.classList.toggle(
-        'active',
-        el.getAttribute('data-page') === page
-      );
+      el.classList.toggle('active', el.getAttribute('data-page') === page);
     });
   }
 
   /* ════════════════════════════════════════════
-     loadComponent
+     initHeader() — branche TOUS les événements
+     du header. Appelé UNE SEULE FOIS après
+     l'injection du HTML dans #site-header.
+  ════════════════════════════════════════════ */
+  function initHeader() {
+    var header        = document.getElementById('caar-header');
+    var searchBtn     = document.getElementById('searchBtn');
+    var searchBar     = document.getElementById('searchBar');
+    var searchClose   = document.getElementById('searchCloseHdr');
+    var searchInput   = document.getElementById('searchInput');
+    var langDropdown  = document.getElementById('langDropdown');
+    var langToggle    = document.getElementById('langToggleBtn');
+    var langMenu      = document.getElementById('langDropdownMenu');
+    var currentLang   = document.getElementById('currentLang');
+    var mobileBtn     = document.getElementById('mobileMenuBtn');
+    var mobileNav     = document.getElementById('mobileNav');
+    var mobileOverlay = document.getElementById('mobileNavOverlay');
+    var mobileClose   = document.getElementById('mobileNavClose');
+
+    /* ── SEARCH ── */
+    function openSearch() {
+      if (!searchBar) return;
+      searchBar.classList.add('open');
+      searchBar.setAttribute('aria-hidden', 'false');
+      if (searchInput) setTimeout(function () { searchInput.focus(); }, 60);
+    }
+    function closeSearch() {
+      if (!searchBar) return;
+      searchBar.classList.remove('open');
+      searchBar.setAttribute('aria-hidden', 'true');
+      if (searchInput) searchInput.value = '';
+    }
+    if (searchBtn) {
+      searchBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        searchBar && searchBar.classList.contains('open') ? closeSearch() : openSearch();
+      });
+    }
+    if (searchClose) searchClose.addEventListener('click', closeSearch);
+
+    /* ── LANGUAGE DROPDOWN ── */
+    function openLang() {
+      if (!langMenu) return;
+      langMenu.classList.add('show');
+      if (langDropdown) langDropdown.classList.add('lang-open');
+      if (langToggle)   langToggle.setAttribute('aria-expanded', 'true');
+    }
+    function closeLang() {
+      if (!langMenu) return;
+      langMenu.classList.remove('show');
+      if (langDropdown) langDropdown.classList.remove('lang-open');
+      if (langToggle)   langToggle.setAttribute('aria-expanded', 'false');
+    }
+    if (langToggle) {
+      langToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        langMenu && langMenu.classList.contains('show') ? closeLang() : openLang();
+      });
+    }
+    if (langMenu) {
+      langMenu.querySelectorAll('[data-lang]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (currentLang) currentLang.textContent = this.getAttribute('data-lang');
+          closeLang();
+        });
+      });
+    }
+
+    /* ── MOBILE DRAWER ── */
+    function openMobile() {
+      if (mobileNav)     { mobileNav.classList.add('open');    mobileNav.setAttribute('aria-hidden', 'false'); }
+      if (mobileOverlay)   mobileOverlay.classList.add('open');
+      if (mobileBtn)       mobileBtn.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeMobile() {
+      if (mobileNav)     { mobileNav.classList.remove('open'); mobileNav.setAttribute('aria-hidden', 'true'); }
+      if (mobileOverlay)   mobileOverlay.classList.remove('open');
+      if (mobileBtn)       mobileBtn.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    }
+    if (mobileBtn)     mobileBtn.addEventListener('click', openMobile);
+    if (mobileClose)   mobileClose.addEventListener('click', closeMobile);
+    if (mobileOverlay) mobileOverlay.addEventListener('click', closeMobile);
+    if (mobileNav) {
+      mobileNav.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', closeMobile);
+      });
+    }
+
+    /* ── ESCAPE KEY ── */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      closeSearch(); closeLang(); closeMobile();
+    });
+
+    /* ── CLICK EN DEHORS ── */
+    document.addEventListener('click', function (e) {
+      if (searchBar && searchBar.classList.contains('open')) {
+        if (header && !header.contains(e.target)) closeSearch();
+      }
+      if (langDropdown && !langDropdown.contains(e.target)) closeLang();
+    });
+
+    /* ── TOUCH sur dropdowns desktop ── */
+    if (header) {
+      header.querySelectorAll('.dropdown').forEach(function (dd) {
+        dd.addEventListener('touchstart', function (e) {
+          var isOpen = dd.classList.contains('touch-open');
+          header.querySelectorAll('.dropdown.touch-open').forEach(function (x) {
+            if (x !== dd) x.classList.remove('touch-open');
+          });
+          if (!isOpen) { e.preventDefault(); dd.classList.add('touch-open'); }
+          else { dd.classList.remove('touch-open'); }
+        }, { passive: false });
+      });
+      document.addEventListener('touchstart', function (e) {
+        if (!e.target.closest || !e.target.closest('.dropdown')) {
+          header.querySelectorAll('.dropdown.touch-open').forEach(function (dd) {
+            dd.classList.remove('touch-open');
+          });
+        }
+      }, { passive: true });
+    }
+
+    /* ── Active nav ── */
+    setActiveNav();
+  }
+
+  /* ════════════════════════════════════════════
+     loadComponent() — fetch générique
+     Récupère un fichier HTML et l'injecte
+     dans l'élément avec l'id donné.
+     Appelle callback() une fois terminé.
   ════════════════════════════════════════════ */
   function loadComponent(id, url, callback) {
     var el = document.getElementById(id);
@@ -440,7 +603,6 @@
       if (callback) callback();
       return;
     }
-
     fetch(url)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -451,54 +613,58 @@
         if (callback) callback();
       })
       .catch(function (err) {
-        console.warn('[CAAR] Load failed:', url, err.message);
+        console.warn('[CAAR] Impossible de charger ' + url + ' :', err.message);
         if (callback) callback();
       });
   }
 
   /* ════════════════════════════════════════════
-     BOOT
+     BOOT — point d'entrée principal
+     1. Charge le header → branche les events
+     2. Charge le footer (en parallèle)
   ════════════════════════════════════════════ */
   function boot() {
+    if (window.__caarReady) return;
+    window.__caarReady = true;
+
     var base = resolveBase();
 
     /* Header */
     var headerEl = document.getElementById('site-header');
     if (headerEl) {
-      loadComponent(
-        'site-header',
-        base + 'components/header.html',
-        function () {
-          /* ⚠️ IMPORTANT :
-             On appelle initHeader SEULEMENT si elle existe
-             (car définie dans ton autre script propre header) */
-          if (typeof initHeader === 'function') {
-            initHeader();
-          }
-        }
-      );
+      loadComponent('site-header', base + 'components/header.html', initHeader);
     } else {
+      /* Le header est codé en dur dans la page → juste activer le nav */
       setActiveNav();
     }
 
-    /* Footer */
-    loadComponent(
-      'site-footer',
-      base + 'components/footer.html'
-    );
+    /* Footer (indépendant, pas de callback nécessaire) */
+    loadComponent('site-footer', base + 'components/footer.html', null);
   }
 
-  /* ════════════════════════════════════════════
-     START
-  ════════════════════════════════════════════ */
+  /* ── Lancer au bon moment ── */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {
     boot();
   }
 
-})();
+}());
 
+// Charger le footer
+fetch('components/footer.html')
+  .then(res => res.text())
+  .then(data => {
+    document.getElementById('site-footer').innerHTML = data;
+  });
+  
+  fetch('components/header.html')
+  .then(res => res.text())
+  .then(data => {
+    document.getElementById('site-header').innerHTML = data;
+  });
+
+  // Product page tab switching
 function show(k, btn) {
   const ids = ['mrh', 'mrp', 'catnat'];
 
@@ -525,58 +691,59 @@ function show(k, btn) {
   const bc = document.getElementById('bc');
   if (bc) bc.textContent = labels[k];
 }
+// Universal product tab system
 function show(k, btn) {
-  /* ── Panels ── */
-  document.querySelectorAll('.detail').forEach(function (p) {
-    p.classList.remove('on');
-  });
+  const panels = document.querySelectorAll('.detail');
+  const buttons = document.querySelectorAll('.sidebar-btn');
 
-  /* ── Buttons ── */
-  document.querySelectorAll('.sidebar-btn').forEach(function (b) {
-    b.classList.remove('active');
-  });
+  panels.forEach(p => p.classList.remove('on'));
+  buttons.forEach(b => b.classList.remove('active'));
 
-  /* ── Activer panel ── */
-  var target = document.getElementById('d-' + k);
+  const target = document.getElementById('d-' + k);
   if (target) target.classList.add('on');
 
-  /* ── Activer bouton ── */
   if (btn) btn.classList.add('active');
 
-  /* ── Breadcrumb / titre ── */
-  var bc = document.getElementById('bc');
+  const bc = document.getElementById('bc');
   if (bc && btn) {
-    var title = btn.innerText ? btn.innerText.split('\n')[0] : '';
+    const title = btn.innerText.split('\n')[0];
     bc.textContent = title;
   }
 }
+function toggleMobileMenu() {
+  const nav = document.getElementById('mobileNav');
+  const overlay = document.getElementById('mobileNavOverlay');
 
+  const isOpen = nav.classList.contains('open');
+
+  nav.classList.toggle('open', !isOpen);
+  overlay.classList.toggle('open', !isOpen);
+
+  document.body.style.overflow = isOpen ? '' : 'hidden';
+}
+/* ══════════════════════════════════════════════════════════════
+   CONTACT PAGE SCRIPT (only runs if form exists)
+══════════════════════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', function () {
 
   var form = document.getElementById('caarContactForm');
-  if (!form) return;
+  if (!form) return; // ⛔ important : n'exécute que sur la page contact
 
   /* ───────── UTILITIES ───────── */
 
   function showError(inputId, errorId) {
     var input = document.getElementById(inputId);
     var errEl = document.getElementById(errorId);
-    if (input) {
-      input.classList.add('field-error');
-      input.classList.remove('field-ok');
-    }
-    if (errEl) errEl.classList.add('visible');
+    if (input) { input.classList.add('field-error'); input.classList.remove('field-ok'); }
+    if (errEl) { errEl.classList.add('visible'); }
   }
 
   function clearError(inputId, errorId) {
     var input = document.getElementById(inputId);
     var errEl = document.getElementById(errorId);
-    if (input) {
-      input.classList.remove('field-error');
-      input.classList.add('field-ok');
-    }
-    if (errEl) errEl.classList.remove('visible');
+    if (input) { input.classList.remove('field-error'); input.classList.add('field-ok'); }
+    if (errEl) { errEl.classList.remove('visible'); }
   }
 
   function liveValidate(inputId, errorId, validatorFn) {
@@ -584,16 +751,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!el) return;
 
     el.addEventListener('input', function () {
-      if (validatorFn(el.value.trim())) {
-        clearError(inputId, errorId);
-      }
+      if (validatorFn(el.value.trim())) clearError(inputId, errorId);
     });
 
     el.addEventListener('blur', function () {
-      var value = el.value.trim();
-      if (value && !validatorFn(value)) {
+      if (el.value.trim() && !validatorFn(el.value.trim())) {
         showError(inputId, errorId);
-      } else if (value) {
+      } else if (el.value.trim()) {
         clearError(inputId, errorId);
       }
     });
@@ -617,14 +781,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  /* ───────── RULES ───────── */
+  /* ───────── VALIDATION RULES ───────── */
 
   var RULES = {
     subject: function (v) { return v.length > 0; },
     name: function (v) { return /^[\p{L}\s'\-]{3,100}$/u.test(v); },
     email: function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); },
     phone: function (v) { return v === '' || /^[0-9\s\+\-\(\)]{8,20}$/.test(v); },
-    message: function (v) { return v.length >= 10 && v.length <= 2000; }
+    message: function (v) { return v.length >= 10 && v.length <= 2000; },
   };
 
   /* ───────── LIVE VALIDATION ───────── */
@@ -635,7 +799,7 @@ document.addEventListener('DOMContentLoaded', function () {
   liveValidate('cfPhone', 'err-phone', RULES.phone);
   liveValidate('cfMessage', 'err-message', RULES.message);
 
-  /* ───────── SUBMIT ───────── */
+  /* ───────── FORM SUBMIT ───────── */
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -644,45 +808,45 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function submitForm() {
 
-    var subject = document.getElementById('cfSubject')?.value || '';
-    var name = document.getElementById('cfName')?.value.trim() || '';
-    var email = document.getElementById('cfEmail')?.value.trim() || '';
-    var phone = document.getElementById('cfPhone')?.value.trim() || '';
-    var message = document.getElementById('cfMessage')?.value.trim() || '';
-    var consent = document.getElementById('cfConsent')?.checked;
-    var robot = document.getElementById('cfRobot')?.checked;
+    var subject = document.getElementById('cfSubject').value;
+    var name = document.getElementById('cfName').value.trim();
+    var email = document.getElementById('cfEmail').value.trim();
+    var phone = document.getElementById('cfPhone').value.trim();
+    var message = document.getElementById('cfMessage').value.trim();
+    var consent = document.getElementById('cfConsent').checked;
+    var robot = document.getElementById('cfRobot').checked;
 
     var hasError = false;
 
     if (!RULES.subject(subject)) { showError('cfSubject', 'err-subject'); hasError = true; }
-    else clearError('cfSubject', 'err-subject');
+    else { clearError('cfSubject', 'err-subject'); }
 
     if (!RULES.name(name)) { showError('cfName', 'err-name'); hasError = true; }
-    else clearError('cfName', 'err-name');
+    else { clearError('cfName', 'err-name'); }
 
     if (!RULES.email(email)) { showError('cfEmail', 'err-email'); hasError = true; }
-    else clearError('cfEmail', 'err-email');
+    else { clearError('cfEmail', 'err-email'); }
 
     if (phone && !RULES.phone(phone)) { showError('cfPhone', 'err-phone'); hasError = true; }
-    else clearError('cfPhone', 'err-phone');
+    else { clearError('cfPhone', 'err-phone'); }
 
     if (!RULES.message(message)) { showError('cfMessage', 'err-message'); hasError = true; }
-    else clearError('cfMessage', 'err-message');
+    else { clearError('cfMessage', 'err-message'); }
 
     if (!consent) {
-      document.getElementById('err-consent')?.classList.add('visible');
+      document.getElementById('err-consent').classList.add('visible');
       hasError = true;
     } else {
-      document.getElementById('err-consent')?.classList.remove('visible');
+      document.getElementById('err-consent').classList.remove('visible');
     }
 
     if (!robot) {
-      document.getElementById('cfRobotWrap')?.classList.add('robot-error');
-      document.getElementById('err-robot')?.classList.add('visible');
+      document.getElementById('cfRobotWrap').classList.add('robot-error');
+      document.getElementById('err-robot').classList.add('visible');
       hasError = true;
     } else {
-      document.getElementById('cfRobotWrap')?.classList.remove('robot-error');
-      document.getElementById('err-robot')?.classList.remove('visible');
+      document.getElementById('cfRobotWrap').classList.remove('robot-error');
+      document.getElementById('err-robot').classList.remove('visible');
     }
 
     if (hasError) {
@@ -692,8 +856,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var btn = document.getElementById('sendBtn');
-    if (!btn) return;
-
     btn.textContent = 'Sending…';
     btn.disabled = true;
     btn.classList.add('loading');
@@ -711,15 +873,15 @@ document.addEventListener('DOMContentLoaded', function () {
         })
       });
 
-      var data = await res.json().catch(() => ({}));
+      var data = await res.json();
 
       if (!res.ok) {
         alert(data.error || 'Something went wrong.');
         return;
       }
 
-      document.getElementById('formFields')?.style.setProperty('display', 'none');
-      document.getElementById('successState')?.classList.add('show');
+      document.getElementById('formFields').style.display = 'none';
+      document.getElementById('successState').classList.add('show');
 
     } catch (err) {
       alert('Server error. Please try again later.');
@@ -743,13 +905,10 @@ document.addEventListener('DOMContentLoaded', function () {
       el.classList.remove('visible');
     });
 
-    document.getElementById('cfRobotWrap')?.classList.remove('robot-error');
-
-    var counter = document.getElementById('cfCharCount');
-    if (counter) counter.textContent = '0 / 2000';
-
-    document.getElementById('formFields')?.style.setProperty('display', '');
-    document.getElementById('successState')?.classList.remove('show');
+    document.getElementById('cfRobotWrap').classList.remove('robot-error');
+    document.getElementById('cfCharCount').textContent = '0 / 2000';
+    document.getElementById('formFields').style.display = '';
+    document.getElementById('successState').classList.remove('show');
   };
 
   /* ───────── CTA SCROLL ───────── */
@@ -760,7 +919,6 @@ document.addEventListener('DOMContentLoaded', function () {
   if (ctaBtn) {
     ctaBtn.addEventListener('click', function () {
       var section = document.getElementById('contactForm');
-      if (!section) return;
 
       if (!formRevealed) {
         section.classList.add('show');
@@ -775,12 +933,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.collapseForm = function () {
     var formSection = document.getElementById('contactForm');
-    if (formSection) formSection.classList.remove('show');
-
+    formSection.classList.remove('show');
     formRevealed = false;
 
-    var hero = document.querySelector('.contact-hero');
-    if (hero) hero.scrollIntoView({ behavior: 'smooth' });
+    document.querySelector('.contact-hero')
+      .scrollIntoView({ behavior: 'smooth' });
   };
 
   /* ───────── MAP ───────── */
@@ -908,392 +1065,187 @@ const WILAYAS = [
 ];
 
 /* ============================================================
-   URL PARAMS
+   URL PARAM CHECK — focus=hq
 ============================================================ */
-const urlParams = new URLSearchParams(window.location.search);
-const focusParam = urlParams.get('focus');
+var urlParams = new URLSearchParams(window.location.search);
+var focusParam = urlParams.get('focus');
 
 /* ============================================================
-   FILTER STATE (source de vérité)
+   FILTER STATE
 ============================================================ */
-const FILTERS = {
-  wilaya: null,
-  city: null,
-  type: null,
-  service: null,
-  search: ''
-};
+const activeFilters = { wilaya: '', city: '', type: '', service: '', search: '' };
 
 /* ============================================================
-   MAP STATE
+   MAP VARIABLES
 ============================================================ */
-const MAP = {
-  hero: null,
-  filter: null,
-  markers: {
-    hero: {},
-    filter: {}
-  }
-};
+var heroMap, filterMap;
+var heroMarkerMap = {}, filterMarkerMap = {};
+
 /* ============================================================
-   STRING NORMALIZATION (search friendly)
+   HELPERS
 ============================================================ */
-function normalize(str) {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // accents
-    .replace(/['’]/g, '')            // apostrophes
-    .trim();
+function normalize(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['']/g, '');
 }
 
-/* ============================================================
-   ICON FACTORY (évite duplication)
-============================================================ */
-function createIcon(options) {
+function makeHeroDotIcon() {
   return L.divIcon({
     className: '',
-    html: options.html,
-    iconSize: options.size,
-    iconAnchor: options.anchor,
-    popupAnchor: options.popupAnchor || [0, 0],
-  });
-}
-
-/* ============================================================
-   HERO ICONS
-============================================================ */
-function makeHeroDotIcon() {
-  return createIcon({
-    size: [10, 10],
-    anchor: [5, 5],
-    html: `
-      <svg width="10" height="10">
-        <circle cx="5" cy="5" r="4.5" fill="#E8761E" stroke="white" stroke-width="1"/>
-      </svg>
-    `
+    html: '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4.5" fill="#E8761E" stroke="white" stroke-width="1"/></svg>',
+    iconSize: [10, 10], iconAnchor: [5, 5],
   });
 }
 
 function makeHQDotIcon() {
-  return createIcon({
-    size: [18, 18],
-    anchor: [9, 9],
-    html: `
-      <svg width="18" height="18">
-        <circle cx="9" cy="9" r="8" fill="#C9601A" stroke="white" stroke-width="2"/>
-        <text x="9" y="13" text-anchor="middle" font-size="9" fill="white">★</text>
-      </svg>
-    `
+  return L.divIcon({
+    className: '',
+    html: '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#C9601A" stroke="white" stroke-width="2"/><text x="9" y="13" text-anchor="middle" font-size="9" fill="white">★</text></svg>',
+    iconSize: [18, 18], iconAnchor: [9, 9],
   });
 }
 
-/* ============================================================
-   FILTER MARKER ICON
-============================================================ */
 function makeFilterIcon(active) {
-  var w = active ? 32 : 26;
-  var h = active ? 42 : 34;
-  var cx = w / 2;
-  var cy = w / 2;
-
+  var w = active ? 32 : 26, h = active ? 42 : 34, cx = w / 2, cy = w / 2;
   var fill = active ? '#C9601A' : '#E8761E';
-
-  return createIcon({
-    size: [w, h],
-    anchor: [cx, h],
-    popupAnchor: [0, -h - 4],
-    html: `
-      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <path d="
-          M${cx} 0
-          C${cx * 0.455} 0 0 ${cy * 0.455} 0 ${cy}
-          C0 ${cy * 1.75} ${cx} ${h} ${cx} ${h}
-          S${w} ${cy * 1.75} ${w} ${cy}
-          C${w} ${cy * 0.455} ${cx * 1.545} 0 ${cx} 0Z
-        " fill="${fill}"/>
-        <circle cx="${cx}" cy="${cy}" r="${w * 0.32}" fill="white"/>
-        <text
-          x="${cx}"
-          y="${cy + w * 0.14}"
-          text-anchor="middle"
-          font-size="${w * 0.3}"
-          font-weight="800"
-          fill="${fill}"
-          font-family="DM Sans,sans-serif"
-        >C</text>
-      </svg>
-    `
+  return L.divIcon({
+    className: '',
+    html: '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" fill="none">' +
+      '<path d="M' + cx + ' 0C' + (cx*0.455) + ' 0 0 ' + (cy*0.455) + ' 0 ' + cy + 'C0 ' + (cy*1.75) + ' ' + cx + ' ' + h + ' ' + cx + ' ' + h + 'S' + w + ' ' + (cy*1.75) + ' ' + w + ' ' + cy + 'C' + w + ' ' + (cy*0.455) + ' ' + (cx*1.545) + ' 0 ' + cx + ' 0Z" fill="' + fill + '"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + (w*0.32) + '" fill="white"/>' +
+      '<text x="' + cx + '" y="' + (cy + w*0.14) + '" text-anchor="middle" font-size="' + (w*0.3) + '" font-weight="800" fill="' + fill + '" font-family="DM Sans,sans-serif">C</text>' +
+      '</svg>',
+    iconSize: [w, h], iconAnchor: [cx, h], popupAnchor: [0, -h - 4],
   });
 }
-/* ============================================================
-   HQ FILTER ICON (avec cache + factory)
-============================================================ */
-const ICON_CACHE = {};
 
 function makeHQFilterIcon(active) {
-  const key = active ? 'hq-active' : 'hq-default';
-  if (ICON_CACHE[key]) return ICON_CACHE[key];
-
-  const w = active ? 36 : 30;
-  const h = active ? 46 : 38;
-  const cx = w / 2;
-  const cy = w / 2;
-
-  const fill = active ? '#8B0000' : '#C9601A';
-
-  const icon = createIcon({
-    size: [w, h],
-    anchor: [cx, h],
-    popupAnchor: [0, -h - 4],
-    html: `
-      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <path d="
-          M${cx} 0
-          C${cx * 0.455} 0 0 ${cy * 0.455} 0 ${cy}
-          C0 ${cy * 1.75} ${cx} ${h} ${cx} ${h}
-          S${w} ${cy * 1.75} ${w} ${cy}
-          C${w} ${cy * 0.455} ${cx * 1.545} 0 ${cx} 0Z
-        " fill="${fill}"/>
-        <circle cx="${cx}" cy="${cy}" r="${w * 0.36}" fill="white"/>
-        <text
-          x="${cx}"
-          y="${cy + w * 0.2}"
-          text-anchor="middle"
-          font-size="${w * 0.36}"
-          fill="${fill}"
-        >★</text>
-      </svg>
-    `
+  var w = active ? 36 : 30, h = active ? 46 : 38, cx = w / 2, cy = w / 2;
+  var fill = active ? '#8B0000' : '#C9601A';
+  return L.divIcon({
+    className: '',
+    html: '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" fill="none">' +
+      '<path d="M' + cx + ' 0C' + (cx*0.455) + ' 0 0 ' + (cy*0.455) + ' 0 ' + cy + 'C0 ' + (cy*1.75) + ' ' + cx + ' ' + h + ' ' + cx + ' ' + h + 'S' + w + ' ' + (cy*1.75) + ' ' + w + ' ' + cy + 'C' + w + ' ' + (cy*0.455) + ' ' + (cx*1.545) + ' 0 ' + cx + ' 0Z" fill="' + fill + '"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + (w*0.36) + '" fill="white"/>' +
+      '<text x="' + cx + '" y="' + (cy + w*0.2) + '" text-anchor="middle" font-size="' + (w*0.36) + '" fill="' + fill + '">★</text>' +
+      '</svg>',
+    iconSize: [w, h], iconAnchor: [cx, h], popupAnchor: [0, -h - 4],
   });
-
-  ICON_CACHE[key] = icon;
-  return icon;
 }
 
-/* ============================================================
-   POPUP BUILDER (safe + clean)
-============================================================ */
 function makePopup(ag) {
-  const isHQ = ag.type === 'hq';
-
-  const hqBadge = isHQ
-    ? `<span class="popup-badge">⭐ Headquarters</span>`
-    : '';
-
-  const callBtn = isHQ
-    ? `<button class="popup-btn pbtn-call"
-        onclick="window.location.href='tel:+213213410016'">
-        📞 Call HQ
-      </button>`
-    : '';
-
-  const contactLink = isHQ
-    ? `<div class="popup-footer">
-         <a href="contact.html">✉ Send a message instead →</a>
-       </div>`
-    : '';
-
-  return `
-    <div class="popup">
-      
-      <div class="popup-head">
-        <div class="popup-head-code">
-          ${TYPE_LABELS[ag.type] || ag.type} • ${ag.wilaya}
-        </div>
-        <div class="popup-head-name">
-          ${ag.name}
-        </div>
-      </div>
-
-      <div class="popup-body">
-
-        ${hqBadge}
-
-        <div class="popup-addr">
-          ${ag.address}
-        </div>
-
-        <div class="popup-actions">
-          <button class="popup-btn pbtn-dir"
-            onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${ag.lat},${ag.lng}','_blank')">
-            🧭 Directions
-          </button>
-
-          ${callBtn}
-        </div>
-
-        ${contactLink}
-
-      </div>
-
-    </div>
-  `;
+  var isHQ = ag.id === 39;
+  var hqBadge = isHQ ? '<span style="display:inline-block;background:#fff3e0;color:#C9601A;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-bottom:4px;">⭐ Headquarters</span><br>' : '';
+  return '<div>' +
+    '<div class="popup-head">' +
+      '<div class="popup-head-code">' + ag.type + ' &bull; ' + ag.wilaya + '</div>' +
+      '<div class="popup-head-name">' + ag.name + '</div>' +
+    '</div>' +
+    '<div class="popup-body">' +
+      hqBadge +
+      '<div class="popup-addr">' + ag.address + '</div>' +
+      '<div class="popup-actions">' +
+        '<button class="popup-btn pbtn-dir" onclick="window.open(\'https://www.google.com/maps/dir/?api=1&destination=' + ag.lat + ',' + ag.lng + '\',\'_blank\')">&#128506; Directions</button>' +
+        (isHQ ? '<button class="popup-btn pbtn-call" onclick="window.location.href=\'tel:+213213410016\'">&#128222; Call HQ</button>' : '') +
+      '</div>' +
+      (isHQ ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;"><a href="contact.html" style="font-size:0.68rem;color:#E8761E;font-weight:700;text-decoration:none;">✉ Send a message instead →</a></div>' : '') +
+    '</div>' +
+  '</div>';
 }
+
 /* ============================================================
    HERO MAP
 ============================================================ */
 function initHeroMap() {
-  if (!document.getElementById('heroMap')) return;
+  heroMap = L.map('heroMap', {
+    center: [28.0339, 1.6596], zoom: 6,
+    zoomControl: true, scrollWheelZoom: false, attributionControl: false,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(heroMap);
+  setTimeout(function() { heroMap.invalidateSize(); }, 150);
 
-  MAP.hero = L.map('heroMap', {
-    center: [28.0339, 1.6596],
-    zoom: 6,
-    zoomControl: true,
-    scrollWheelZoom: false,
-    attributionControl: false,
+  var dotIcon = makeHeroDotIcon();
+  var hqIcon  = makeHQDotIcon();
+
+  AGENCIES.forEach(function(ag) {
+    var icon = ag.id === 39 ? hqIcon : dotIcon;
+    var m = L.marker([ag.lat, ag.lng], { icon: icon }).addTo(heroMap);
+    m.bindPopup(
+      '<div style="font-family:DM Sans,sans-serif;padding:4px 2px">' +
+      '<strong style="font-size:0.75rem">' + ag.name + '</strong><br>' +
+      '<span style="font-size:0.65rem;color:#666">' + ag.wilaya + '</span>' +
+      (ag.id === 39 ? '<br><a href="contact.html" style="font-size:0.65rem;color:#E8761E;font-weight:700;">Contact us →</a>' : '') +
+      '</div>',
+      { maxWidth: 150, minWidth: 130 }
+    );
+    heroMarkerMap[ag.id] = m;
   });
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
-  }).addTo(MAP.hero);
-
-  setTimeout(() => MAP.hero.invalidateSize(), 150);
-
-  const dotIcon = makeHeroDotIcon();
-  const hqIcon  = makeHQDotIcon();
-
-  AGENCIES.forEach(function (ag) {
-    const isHQ = ag.type === 'hq';
-    const icon = isHQ ? hqIcon : dotIcon;
-
-    const marker = L.marker([ag.lat, ag.lng], { icon }).addTo(MAP.hero);
-
-    marker.bindPopup(`
-      <div class="hero-popup">
-        <strong>${ag.name}</strong><br>
-        <span>${ag.wilaya}</span>
-        ${isHQ ? `<br><a href="contact.html">Contact us →</a>` : ''}
-      </div>
-    `, { maxWidth: 150, minWidth: 130 });
-
-    MAP.markers.hero[ag.id] = marker;
-  });
-
-  /* Focus HQ */
-  if (hasFocusHQ() && HQ_AGENCY) {
-    setTimeout(function () {
-      MAP.hero.flyTo([HQ_AGENCY.lat, HQ_AGENCY.lng], 15, {
-        animate: true,
-        duration: 1.8
-      });
+  if (focusParam === 'hq' && HQ_AGENCY) {
+    setTimeout(function() {
+      heroMap.flyTo([HQ_AGENCY.lat, HQ_AGENCY.lng], 15, { animate: true, duration: 1.8 });
     }, 400);
-  }
-}function initFilterMap() {
-  if (!document.getElementById('filterMap')) return;
-
-  MAP.filter = L.map('filterMap', {
-    center: [28.0339, 1.6596],
-    zoom: 6,
-    zoomControl: true,
-    scrollWheelZoom: true,
-  });
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(MAP.filter);
-
-  setTimeout(() => MAP.filter.invalidateSize(), 150);
-
-  /* ───────── MARKERS ───────── */
-  AGENCIES.forEach(function (ag) {
-    const isHQ = ag.type === 'hq';
-
-    const marker = L.marker([ag.lat, ag.lng], {
-      icon: isHQ ? makeHQFilterIcon(false) : makeFilterIcon(false)
-    }).addTo(MAP.filter);
-
-    marker.bindPopup(makePopup(ag), {
-      maxWidth: 260,
-      minWidth: 250
-    });
-
-    marker.on('click', function () {
-      resetFilterIcons();
-
-      marker.setIcon(
-        isHQ ? makeHQFilterIcon(true) : makeFilterIcon(true)
-      );
-
-      highlightFilterCard(ag.id);
-
-      setTimeout(() => marker.openPopup(), 80);
-    });
-
-    MAP.markers.filter[ag.id] = marker;
-  });
-
-  /* ───────── CARDS INIT ───────── */
-  renderFilterCards(AGENCIES);
-
-  /* ───────── FOCUS HQ ───────── */
-  if (hasFocusHQ() && HQ_AGENCY) {
-    setTimeout(focusOnHQ, 600);
   }
 }
 
 /* ============================================================
-   FOCUS ON HQ
+   FILTER MAP
 ============================================================ */
+function initFilterMap() {
+  filterMap = L.map('filterMap', {
+    center: [28.0339, 1.6596], zoom: 6,
+    zoomControl: true, scrollWheelZoom: true,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
+  }).addTo(filterMap);
+  setTimeout(function() { filterMap.invalidateSize(); }, 150);
+
+  AGENCIES.forEach(function(ag) {
+    var icon = ag.id === 39 ? makeHQFilterIcon(false) : makeFilterIcon(false);
+    var m = L.marker([ag.lat, ag.lng], { icon: icon }).addTo(filterMap);
+    m.bindPopup(makePopup(ag), { maxWidth: 260, minWidth: 250 });
+    m.on('click', function() {
+      resetFilterIcons();
+      m.setIcon(ag.id === 39 ? makeHQFilterIcon(true) : makeFilterIcon(true));
+      highlightFilterCard(ag.id);
+      setTimeout(function() { m.openPopup(); }, 80);
+    });
+    filterMarkerMap[ag.id] = m;
+  });
+
+  renderFilterCards(AGENCIES);
+
+  if (focusParam === 'hq' && HQ_AGENCY) {
+    setTimeout(function() { focusOnHQ(); }, 600);
+  }
+}
+
 /* ============================================================
    FOCUS ON HQ
 ============================================================ */
 function focusOnHQ() {
-  const banner = document.getElementById('focusBanner');
-  const section = document.getElementById('filterSection');
-
-  if (banner) banner.classList.add('show');
-  if (!MAP.filter || !HQ_AGENCY) return;
-
-  const marker = MAP.markers.filter[HQ_AGENCY.id];
-
-  MAP.filter.flyTo([HQ_AGENCY.lat, HQ_AGENCY.lng], 15, {
-    animate: true,
-    duration: 1.5
-  });
-
+  document.getElementById('focusBanner').classList.add('show');
+  filterMap.flyTo([HQ_AGENCY.lat, HQ_AGENCY.lng], 15, { animate: true, duration: 1.5 });
   resetFilterIcons();
-
-  if (marker) {
-    marker.setIcon(makeHQFilterIcon(true));
-
-    setTimeout(() => marker.openPopup(), 1200);
-  }
-
-  highlightFilterCard(HQ_AGENCY.id);
-
-  if (section) {
-    setTimeout(() => {
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
-  }
+  filterMarkerMap[39].setIcon(makeHQFilterIcon(true));
+  setTimeout(function() { filterMarkerMap[39].openPopup(); }, 1600);
+  highlightFilterCard(39);
+  setTimeout(function() {
+    document.getElementById('filterSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 300);
 }
 
-/* ============================================================
-   DISMISS BANNER
-============================================================ */
 function dismissFocusBanner() {
-  const banner = document.getElementById('focusBanner');
-  if (banner) banner.classList.remove('show');
+  document.getElementById('focusBanner').classList.remove('show');
 }
 
 /* ============================================================
-   RESET FILTER ICONS
+   FILTER CARDS
 ============================================================ */
 function resetFilterIcons() {
-  Object.keys(MAP.markers.filter).forEach(function (id) {
-    const ag = AGENCIES.find(a => a.id === Number(id));
-    if (!ag) return;
-
-    const marker = MAP.markers.filter[id];
-
-    marker.setIcon(
-      ag.type === 'hq'
-        ? makeHQFilterIcon(false)
-        : makeFilterIcon(false)
-    );
+  Object.keys(filterMarkerMap).forEach(function(id) {
+    var ag = AGENCIES.find(function(a) { return a.id === parseInt(id); });
+    filterMarkerMap[id].setIcon(ag && ag.id === 39 ? makeHQFilterIcon(false) : makeFilterIcon(false));
   });
 }
 
@@ -1302,208 +1254,71 @@ function renderFilterCards(list) {
   var noRes     = document.getElementById('filterNoResults');
   var countEl   = document.getElementById('filterCountNum');
 
-  if (!container) return;
-
-  /* ───────── compteur ───────── */
   if (countEl) countEl.textContent = list.length;
 
-  /* ───────── aucun résultat ───────── */
   if (!list.length) {
     container.innerHTML = '';
-    if (noRes) noRes.classList.add('show');
+    noRes.classList.add('show');
     return;
   }
+  noRes.classList.remove('show');
 
-  if (noRes) noRes.classList.remove('show');
-
-  /* ───────── sécurité HTML ───────── */
-  function escapeHTML(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, function(m) {
-      return {
-        '&':'&amp;',
-        '<':'&lt;',
-        '>':'&gt;',
-        '"':'&quot;',
-        "'":'&#39;'
-      }[m];
-    });
-  }
-
-  /* ───────── génération HTML ───────── */
   container.innerHTML = list.map(function(ag) {
-
     var isHQ = ag.id === 39;
-
     var typeIcon = isHQ ? '⭐' :
-      ag.type === 'Main Agency'     ? '🏢' :
-      ag.type === 'Regional Office' ? '🏬' :
-      ag.type === 'Claims Center'   ? '🗂' : '📍';
-
+                  ag.type === 'Main Agency'    ? '🏢' :
+                  ag.type === 'Regional Office'? '🏬' :
+                  ag.type === 'Claims Center'  ? '🗂' : '📍';
     var svcs = (ag.services || []).map(function(s) {
-      return '<span class="fc-service-tag">' + escapeHTML(s) + '</span>';
+      return '<span class="fc-service-tag">' + s + '</span>';
     }).join('');
-
-    var hqStyle = isHQ
-      ? 'border-left-color:var(--hdr-orange);background:#fff8f2;'
-      : '';
-
-    return `
-      <div class="filter-card" data-id="${ag.id}" style="${hqStyle}">
-        
-        <div class="fc-header">
-          <div class="fc-name">
-            CAAR — ${escapeHTML(ag.name)}
-            ${isHQ ? '<span style="font-size:0.6rem;color:var(--hdr-orange);font-weight:700;">HQ</span>' : ''}
-          </div>
-          <div class="fc-code">${typeIcon}</div>
-        </div>
-
-        <div class="fc-wilaya">
-          ${escapeHTML(ag.city)}, ${escapeHTML(ag.wilaya)}
-        </div>
-
-        ${ag.director ? `<div class="fc-director">👤 ${escapeHTML(ag.director)}</div>` : ''}
-
-        <div class="fc-hours">
-          Sunday to Thursday, 08:30 – 16:00
-        </div>
-
-        ${svcs ? `<div class="fc-services">${svcs}</div>` : ''}
-
-        <div class="fc-btns">
-          <button class="fc-btn fc-btn-map">View on map</button>
-          <button class="fc-btn fc-btn-dir">Directions</button>
-          <button class="fc-btn fc-btn-call">📞 Call</button>
-        </div>
-
-      </div>
-    `;
+    var hqStyle = isHQ ? 'border-left-color:var(--hdr-orange);background:#fff8f2;' : '';
+    return '<div class="filter-card" id="fcard-' + ag.id + '" style="' + hqStyle + '" onclick="flyToFilterAgency(' + ag.id + ')">' +
+      '<div class="fc-header">' +
+        '<div class="fc-name">CAAR &mdash; ' + ag.name + (isHQ ? ' <span style="font-size:0.6rem;color:var(--hdr-orange);font-weight:700;">HQ</span>' : '') + '</div>' +
+        '<div class="fc-code">' + typeIcon + '</div>' +
+      '</div>' +
+      '<div class="fc-wilaya">' + ag.city + ', ' + ag.wilaya + '</div>' +
+      (ag.director ? '<div class="fc-director">👤 ' + ag.director + '</div>' : '') +
+      '<div class="fc-hours">Sunday to Thursday, 08:30 – 16:00</div>' +
+      (svcs ? '<div class="fc-services">' + svcs + '</div>' : '') +
+      '<div class="fc-btns" onclick="event.stopPropagation()">' +
+        '<button class="fc-btn fc-btn-map" onclick="flyToFilterAgency(' + ag.id + ')">View on map</button>' +
+        '<button class="fc-btn fc-btn-dir" onclick="window.open(\'https://www.google.com/maps/dir/?api=1&destination=' + ag.lat + ',' + ag.lng + '\',\'_blank\')">Directions</button>' +
+        '<button class="fc-btn fc-btn-call" onclick="window.location.href=\'tel:+213213410016\'">📞 Call</button>' +
+      '</div>' +
+    '</div>';
   }).join('');
 
-  /* ───────── EVENTS (IMPORTANT : pas de onclick inline) ───────── */
-  container.querySelectorAll('.filter-card').forEach(function(card) {
-
-    var id = parseInt(card.getAttribute('data-id'));
-
-    /* click carte */
-    card.addEventListener('click', function () {
-      flyToFilterAgency(id);
-    });
-
-    /* boutons internes */
-    var btnMap = card.querySelector('.fc-btn-map');
-    var btnDir = card.querySelector('.fc-btn-dir');
-    var btnCall = card.querySelector('.fc-btn-call');
-
-    if (btnMap) {
-      btnMap.addEventListener('click', function (e) {
-        e.stopPropagation();
-        flyToFilterAgency(id);
-      });
-    }
-
-    if (btnDir) {
-      btnDir.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var ag = AGENCIES.find(function(a){ return a.id === id; });
-        if (ag) {
-          window.open(
-            'https://www.google.com/maps/dir/?api=1&destination=' + ag.lat + ',' + ag.lng,
-            '_blank'
-          );
-        }
-      });
-    }
-
-    if (btnCall) {
-      btnCall.addEventListener('click', function (e) {
-        e.stopPropagation();
-        window.location.href = 'tel:+213213410016';
-      });
-    }
-
-  });
-
-  /* ───────── synchro map ───────── */
   var filteredIds = {};
   list.forEach(function(a) { filteredIds[a.id] = true; });
-
   Object.keys(filterMarkerMap).forEach(function(id) {
     var m = filterMarkerMap[id];
-    if (filteredIds[id]) {
-      if (!filterMap.hasLayer(m)) m.addTo(filterMap);
-    } else {
-      if (filterMap.hasLayer(m)) filterMap.removeLayer(m);
-    }
+    if (filteredIds[id]) { if (!filterMap.hasLayer(m)) m.addTo(filterMap); }
+    else                  { if (filterMap.hasLayer(m)) filterMap.removeLayer(m); }
   });
 
-  /* ───────── zoom intelligent ───────── */
   if (list.length > 0 && list.length < AGENCIES.length) {
-    var group = L.featureGroup(
-      list.map(function(ag) { return filterMarkerMap[ag.id]; })
-    );
+    var group = L.featureGroup(list.map(function(ag) { return filterMarkerMap[ag.id]; }));
     filterMap.fitBounds(group.getBounds().pad(0.2));
   } else {
-    filterMap.flyTo([28.0339, 1.6596], 6, {
-      animate: true,
-      duration: 1
-    });
+    filterMap.flyTo([28.0339, 1.6596], 6, { animate: true, duration: 1 });
   }
 }
+
 function highlightFilterCard(id) {
-  var cards = document.querySelectorAll('.filter-card');
-
-  cards.forEach(function(c) {
-    c.classList.remove('active');
-  });
-
-  var el = document.querySelector('.filter-card[data-id="' + id + '"]');
-
-  if (el) {
-    el.classList.add('active');
-
-    el.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest'
-    });
-  }
+  document.querySelectorAll('.filter-card').forEach(function(c) { c.classList.remove('active'); });
+  var el = document.getElementById('fcard-' + id);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 }
 
 function flyToFilterAgency(id) {
-  var ag = AGENCIES.find(function(a) {
-    return a.id === id;
-  });
-
-  if (!ag || !filterMap) return;
-
-  var marker = filterMarkerMap[id];
-  if (!marker) return;
-
-  /* ───────── déplacement carte ───────── */
-  filterMap.flyTo([ag.lat, ag.lng], 15, {
-    animate: true,
-    duration: 1.2
-  });
-
-  /* ───────── reset icônes ───────── */
+  var ag = AGENCIES.find(function(a) { return a.id === id; });
+  if (!ag) return;
+  filterMap.flyTo([ag.lat, ag.lng], 15, { animate: true, duration: 1.2 });
   resetFilterIcons();
-
-  /* ───────── activer icône sélectionnée ───────── */
-  var activeIcon = ag.id === 39
-    ? makeHQFilterIcon(true)
-    : makeFilterIcon(true);
-
-  marker.setIcon(activeIcon);
-
-  /* ───────── ouvrir popup après animation ───────── */
-  setTimeout(function() {
-    if (filterMap.hasLayer(marker)) {
-      marker.openPopup();
-    }
-  }, 1200);
-
-  /* ───────── highlight carte ───────── */
+  filterMarkerMap[id].setIcon(ag.id === 39 ? makeHQFilterIcon(true) : makeFilterIcon(true));
+  setTimeout(function() { filterMarkerMap[id].openPopup(); }, 1200);
   highlightFilterCard(id);
 }
 
@@ -1512,484 +1327,160 @@ function flyToFilterAgency(id) {
 ============================================================ */
 var autoItems = [];
 
-var autoItems = [];
-
 function onSearchInput(val) {
   var clearBtn = document.getElementById('sClear');
-  if (clearBtn) {
-    clearBtn.classList.toggle('vis', val.length > 0);
-  }
-
+  if (clearBtn) clearBtn.classList.toggle('vis', val.length > 0);
   var q = normalize(val);
-
-  if (q.length < 2) {
-    closeAuto();
-    return;
-  }
+  if (q.length < 2) { closeAuto(); return; }
 
   autoItems = [];
   var seen = {};
 
-  /* ───────── wilayas ───────── */
   WILAYAS.forEach(function(w) {
     var key = normalize(w.name);
-
     if (key.indexOf(q) !== -1 && !seen['w:' + key]) {
       seen['w:' + key] = true;
-
-      autoItems.push({
-        type: 'wilaya',
-        label: w.name,
-        sub: 'Wilaya',
-        lat: w.lat,
-        lng: w.lng,
-        zoom: w.zoom
-      });
+      autoItems.push({ type: 'wilaya', label: w.name, sub: 'Wilaya', lat: w.lat, lng: w.lng, zoom: w.zoom });
     }
   });
 
-  /* ───────── agences ───────── */
   AGENCIES.forEach(function(ag) {
-
-    var hit =
-      normalize(ag.name).indexOf(q) !== -1 ||
-      normalize(ag.city).indexOf(q) !== -1 ||
-      normalize(ag.address).indexOf(q) !== -1 ||
-      normalize(ag.wilaya).indexOf(q) !== -1;
-
+    var hit = normalize(ag.name).indexOf(q) !== -1 ||
+              normalize(ag.city).indexOf(q) !== -1 ||
+              normalize(ag.address).indexOf(q) !== -1 ||
+              normalize(ag.wilaya).indexOf(q) !== -1;
     if (hit && !seen['a:' + ag.id]) {
       seen['a:' + ag.id] = true;
-
-      autoItems.push({
-        type: 'agency',
-        id: ag.id,
-        label: ag.name,
-        sub: ag.address.substring(0, 46) + '...',
-        lat: ag.lat,
-        lng: ag.lng
-      });
+      autoItems.push({ type: 'agency', id: ag.id, label: ag.name, sub: ag.address.substring(0, 46) + '...', lat: ag.lat, lng: ag.lng });
     }
   });
 
-  /* limiter */
   autoItems = autoItems.slice(0, 8);
-
   renderAuto(autoItems);
 }
+
 function renderAuto(items) {
   var list = document.getElementById('autoList');
-  if (!list) return;
-
-  /* ───────── sécurité HTML ───────── */
-  function escapeHTML(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, function(m) {
-      return {
-        '&':'&amp;',
-        '<':'&lt;',
-        '>':'&gt;',
-        '"':'&quot;',
-        "'":'&#39;'
-      }[m];
-    });
-  }
-
-  if (!items.length) {
-    list.classList.remove('open');
-    list.innerHTML = '';
-    return;
-  }
-
-  /* ───────── HTML sans onclick ───────── */
+  if (!items.length) { list.classList.remove('open'); return; }
   list.innerHTML = items.map(function(it, i) {
-    return `
-      <div class="auto-item" data-index="${i}">
-        <span class="auto-ico">
-          ${it.type === 'wilaya' ? '🗺' : '📍'}
-        </span>
-        <div>
-          <div class="auto-name">${escapeHTML(it.label)}</div>
-          <div class="auto-sub">${escapeHTML(it.sub)}</div>
-        </div>
-      </div>
-    `;
+    return '<div class="auto-item" onclick="selectAuto(' + i + ')">' +
+      '<span class="auto-ico">' + (it.type === 'wilaya' ? '🗺' : '📍') + '</span>' +
+      '<div><div class="auto-name">' + it.label + '</div><div class="auto-sub">' + it.sub + '</div></div>' +
+    '</div>';
   }).join('');
-
   list.classList.add('open');
-
-  /* ───────── EVENTS ───────── */
-  list.querySelectorAll('.auto-item').forEach(function(el) {
-    el.addEventListener('click', function() {
-      var index = parseInt(this.getAttribute('data-index'));
-      selectAuto(index);
-    });
-  });
 }
 
 function selectAuto(i) {
   var it = autoItems[i];
-  if (!it || !heroMap) return;
-
+  if (!it) return;
   var input = document.getElementById('mapSearch');
   if (input) input.value = it.label;
-
   closeAuto();
-
-  heroMap.flyTo([it.lat, it.lng], it.zoom || 12, {
-    animate: true,
-    duration: 1.5
-  });
+  heroMap.flyTo([it.lat, it.lng], it.zoom || 12, { animate: true, duration: 1.5 });
 }
 
 function onSearchKey(e) {
-  if (!heroMap) return;
-
-  var input = document.getElementById('mapSearch');
-  var value = input ? input.value : '';
-  var q = normalize(value || '');
-
   if (e.key === 'Enter') {
-
-    /* ───────── recherche wilaya ───────── */
-    var wMatch = WILAYAS.find(function(w) {
-      return normalize(w.name).indexOf(q) !== -1;
-    });
-
-    if (wMatch) {
-      heroMap.flyTo([wMatch.lat, wMatch.lng], wMatch.zoom || 10, {
-        animate: true,
-        duration: 1.2
-      });
-      closeAuto();
-      return;
-    }
-
-    /* ───────── recherche agence ───────── */
-    var ag = AGENCIES.find(function(a) {
-      return (
-        normalize(a.name).indexOf(q) !== -1 ||
-        normalize(a.city).indexOf(q) !== -1 ||
-        normalize(a.wilaya).indexOf(q) !== -1
-      );
-    });
-
-    if (ag) {
-      heroMap.flyTo([ag.lat, ag.lng], 14, {
-        animate: true,
-        duration: 1.2
-      });
-      closeAuto();
-      return;
-    }
-
-    /* ───────── aucun résultat ───────── */
-    closeAuto();
-    console.warn('[Search] Aucun résultat pour:', value);
+    var q = normalize((document.getElementById('mapSearch') || {}).value || '');
+    var wMatch = WILAYAS.find(function(w) { return normalize(w.name).indexOf(q) !== -1; });
+    if (wMatch) { heroMap.flyTo([wMatch.lat, wMatch.lng], wMatch.zoom, { animate: true }); closeAuto(); return; }
+    var ag = AGENCIES.find(function(a) { return normalize(a.name).indexOf(q) !== -1 || normalize(a.city).indexOf(q) !== -1; });
+    if (ag) { heroMap.flyTo([ag.lat, ag.lng], 14, { animate: true }); closeAuto(); }
   }
-
-  if (e.key === 'Escape') {
-    closeAuto();
-  }
+  if (e.key === 'Escape') closeAuto();
 }
 
 function clearSearch() {
   var input = document.getElementById('mapSearch');
   if (input) input.value = '';
-
   var clearBtn = document.getElementById('sClear');
   if (clearBtn) clearBtn.classList.remove('vis');
-
   closeAuto();
-
-  if (!heroMap) return;
-
-  heroMap.flyTo([28.0339, 1.6596], 6, {
-    animate: true,
-    duration: 1.5
-  });
+  heroMap.flyTo([28.0339, 1.6596], 6, { animate: true, duration: 1.5 });
 }
 
 function closeAuto() {
   var list = document.getElementById('autoList');
-  if (!list) return;
-
-  list.classList.remove('open');
-  list.innerHTML = ''; // 🔥 important : clean DOM
+  if (list) list.classList.remove('open');
 }
+
 document.addEventListener('click', function(e) {
-  var searchWrap = document.querySelector('.search-wrap');
-
-  if (!searchWrap) return;
-
-  if (!e.target.closest('.search-wrap')) {
-    closeAuto();
-  }
+  if (!e.target.closest('.search-wrap')) closeAuto();
 });
-var input = document.getElementById('mapSearch');
-
-if (input) {
-  input.addEventListener('blur', function () {
-    setTimeout(closeAuto, 150);
-  });
-}
 
 /* ============================================================
    FILTER DROPDOWNS
 ============================================================ */
-var FILTER_DROPS = ['fd-wilaya', 'fd-city', 'fd-type', 'fd-service'];
-function toggleDrop(id) {
-  if (!id) return;
-
-  FILTER_DROPS.forEach(function(d) {
-    var el = document.getElementById(d);
-    if (!el) return;
-
-    if (d !== id) {
-      el.classList.remove('open');
-    }
-  });
-
-  var target = document.getElementById(id);
-  if (!target) return;
-
-  target.classList.toggle('open');
-}
-document.addEventListener('click', function(e) {
-
-  var isInsideDropdown = e.target.closest('.filter-dropdown');
-  var isInsideSearch   = e.target.closest('.fd-search-wrap');
-
-  if (!isInsideDropdown && !isInsideSearch) {
-
-    FILTER_DROPS.forEach(function(d) {
-      var el = document.getElementById(d);
-      if (el) el.classList.remove('open');
-    });
-
-  }
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key !== 'Escape') return;
-
-  FILTER_DROPS.forEach(function(d) {
-    var el = document.getElementById(d);
-    if (el) el.classList.remove('open');
-  });
-});
-document.querySelectorAll('.filter-dropdown').forEach(function(el) {
-  el.addEventListener('click', function(e) {
-    e.stopPropagation();
-  });
-});
-
-/* ============================================================
-   DROPDOWN TOGGLE
-============================================================ */
 function toggleDrop(id) {
   ['fd-wilaya', 'fd-city', 'fd-type', 'fd-service'].forEach(function(d) {
-    var el = document.getElementById(d);
-    if (el && d !== id) el.classList.remove('open');
+    if (d !== id) document.getElementById(d).classList.remove('open');
   });
-
-  var target = document.getElementById(id);
-  if (target) target.classList.toggle('open');
+  document.getElementById(id).classList.toggle('open');
 }
 
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.filter-dropdown') && !e.target.closest('.fd-search-wrap')) {
     ['fd-wilaya', 'fd-city', 'fd-type', 'fd-service'].forEach(function(d) {
-      var el = document.getElementById(d);
-      if (el) el.classList.remove('open');
+      document.getElementById(d).classList.remove('open');
     });
   }
 });
 
-
-/* ============================================================
-   BUILD DROPDOWNS
-============================================================ */
 function buildWilayaDropdown() {
   var menu = document.getElementById('fdm-wilaya');
-  if (!menu || typeof WILAYAS === 'undefined') return;
-
   var agencyWilayas = {};
-  AGENCIES.forEach(function(a) {
-    agencyWilayas[a.wilaya] = true;
-  });
-
+  AGENCIES.forEach(function(a) { agencyWilayas[a.wilaya] = true; });
   var html = '<div class="fd-item fd-item-all active" onclick="setFilter(\'wilaya\',\'\',this)">🌍 All Wilayas</div>';
-
   WILAYAS.forEach(function(w) {
     var has = !!agencyWilayas[w.name];
     html += '<div class="fd-item' + (has ? ' fd-has-agency' : '') + '" onclick="setFilter(\'wilaya\',\'' + w.name + '\',this)">' +
-      (has ? '📍' : '○') + ' ' + w.name +
-    '</div>';
+      (has ? '📍' : '○') + ' ' + w.name + '</div>';
   });
-
   menu.innerHTML = html;
 }
-
 
 function buildCityDropdown(wilaya) {
   var menu = document.getElementById('fdm-city');
-  if (!menu) return;
-
-  var source = wilaya
-    ? AGENCIES.filter(function(a) { return a.wilaya === wilaya; })
-    : AGENCIES;
-
+  var source = wilaya ? AGENCIES.filter(function(a) { return a.wilaya === wilaya; }) : AGENCIES;
   var citySet = {};
-  source.forEach(function(a) {
-    citySet[a.city] = true;
-  });
-
+  source.forEach(function(a) { citySet[a.city] = true; });
   var cities = Object.keys(citySet).sort();
-
   var html = '<div class="fd-item fd-item-all active" onclick="setFilter(\'city\',\'\',this)">All Cities</div>';
-
   cities.forEach(function(c) {
     html += '<div class="fd-item" onclick="setFilter(\'city\',\'' + c + '\',this)">' + c + '</div>';
   });
-
   menu.innerHTML = html;
 }
 
-
-/* ============================================================
-   SET FILTER
-============================================================ */
 function setFilter(key, val, el) {
   activeFilters[key] = val;
-
-  var labels = {
-    wilaya: 'Wilaya',
-    city: 'City',
-    type: 'Agency Type',
-    service: 'Services'
-  };
-
+  var labels = { wilaya: 'Wilaya', city: 'City', type: 'Agency Type', service: 'Services' };
   var lbl = document.getElementById('fdlbl-' + key);
   if (lbl) lbl.textContent = val || labels[key];
-
   var menu = document.getElementById('fdm-' + key);
-  if (menu) {
-    menu.querySelectorAll('.fd-item').forEach(function(i) {
-      i.classList.remove('active');
-    });
-  }
+  menu.querySelectorAll('.fd-item').forEach(function(i) { i.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('fd-' + key).classList.remove('open');
 
-  if (el) el.classList.add('active');
-
-  var dropdown = document.getElementById('fd-' + key);
-  if (dropdown) dropdown.classList.remove('open');
-
-  /* ── CAS WILAYA ── */
   if (key === 'wilaya') {
     activeFilters.city = '';
-
     var cityLbl = document.getElementById('fdlbl-city');
     if (cityLbl) cityLbl.textContent = 'City';
-
     buildCityDropdown(val);
-
-    if (val && typeof WILAYAS !== 'undefined') {
-      var wc = WILAYAS.find(function(w) {
-        return w.name === val;
-      });
-
-      if (wc && filterMap) {
-        filterMap.flyTo([wc.lat, wc.lng], wc.zoom || 10, {
-          animate: true,
-          duration: 1.2
-        });
-      }
+    if (val) {
+      var wc = WILAYAS.find(function(w) { return w.name === val; });
+      if (wc) filterMap.flyTo([wc.lat, wc.lng], wc.zoom, { animate: true, duration: 1.2 });
     }
   }
-
   applyFilters();
   updateFilterTags();
 }
 
-
-/* ============================================================
-   APPLY FILTERS
-============================================================ */
-function applyFilters() {
-  var list = AGENCIES.filter(function(a) {
-
-    if (activeFilters.wilaya && a.wilaya !== activeFilters.wilaya) return false;
-    if (activeFilters.city && a.city !== activeFilters.city) return false;
-    if (activeFilters.type && a.type !== activeFilters.type) return false;
-
-    if (activeFilters.service) {
-      if (!a.services || a.services.indexOf(activeFilters.service) === -1) return false;
-    }
-
-    if (activeFilters.search) {
-      var q = normalize(activeFilters.search);
-      var hit =
-        normalize(a.name).includes(q) ||
-        normalize(a.city).includes(q) ||
-        normalize(a.address).includes(q);
-
-      if (!hit) return false;
-    }
-
-    return true;
-  });
-
-  renderFilterCards(list);
-}
-
-
-/* ============================================================
-   FILTER TAGS (UI)
-============================================================ */
-function updateFilterTags() {
-  var container = document.getElementById('filterTags');
-  if (!container) return;
-
-  var html = '';
-
-  Object.keys(activeFilters).forEach(function(k) {
-    var val = activeFilters[k];
-    if (!val) return;
-
-    html += '<span class="filter-tag">' +
-      val +
-      ' <button onclick="removeFilter(\'' + k + '\')">✕</button>' +
-    '</span>';
-  });
-
-  container.innerHTML = html;
-}
-
-
-function removeFilter(key) {
-  activeFilters[key] = '';
-
-  var lbl = document.getElementById('fdlbl-' + key);
-  if (lbl) {
-    var defaults = {
-      wilaya: 'Wilaya',
-      city: 'City',
-      type: 'Agency Type',
-      service: 'Services'
-    };
-    lbl.textContent = defaults[key];
-  }
-
-  applyFilters();
-  updateFilterTags();
-}/* ============================================================
-   SEARCH FILTER
-============================================================ */
 function setSearchFilter(val) {
-  activeFilters.search = (val || '').trim().toLowerCase();
-
+  activeFilters.search = val.trim().toLowerCase();
   var clr = document.getElementById('fdSearchClear');
-  if (clr) clr.style.display = activeFilters.search ? 'block' : 'none';
-
+  if (clr) clr.style.display = val ? 'block' : 'none';
   applyFilters();
   updateFilterTags();
 }
@@ -1997,406 +1488,154 @@ function setSearchFilter(val) {
 function clearNameSearch() {
   var inp = document.getElementById('fdSearchInput');
   if (inp) inp.value = '';
-
   activeFilters.search = '';
-
   var clr = document.getElementById('fdSearchClear');
   if (clr) clr.style.display = 'none';
-
   applyFilters();
   updateFilterTags();
 }
 
-
-/* ============================================================
-   APPLY FILTERS (SAFE VERSION)
-============================================================ */
 function applyFilters() {
-  if (!Array.isArray(AGENCIES)) return;
-
-  var result = AGENCIES.filter(function(ag) {
-
-    /* ── Wilaya ── */
-    if (activeFilters.wilaya && ag.wilaya !== activeFilters.wilaya) {
-      return false;
-    }
-
-    /* ── City ── */
-    if (activeFilters.city && ag.city !== activeFilters.city) {
-      return false;
-    }
-
-    /* ── Type ── */
-    if (activeFilters.type && ag.type !== activeFilters.type) {
-      return false;
-    }
-
-    /* ── Service ── */
-    if (activeFilters.service) {
-      if (!ag.services || ag.services.indexOf(activeFilters.service) === -1) {
-        return false;
-      }
-    }
-
-    /* ── Search ── */
-    if (activeFilters.search) {
-      var q = activeFilters.search;
-
-      var match =
-        normalize(ag.name).includes(q) ||
-        normalize(ag.city).includes(q) ||
-        normalize(ag.wilaya).includes(q) ||
-        normalize(ag.address).includes(q);
-
-      if (!match) return false;
-    }
-
-    return true;
+  var result = AGENCIES;
+  if (activeFilters.wilaya)  result = result.filter(function(ag) { return ag.wilaya === activeFilters.wilaya; });
+  if (activeFilters.city)    result = result.filter(function(ag) { return ag.city   === activeFilters.city; });
+  if (activeFilters.type)    result = result.filter(function(ag) { return ag.type   === activeFilters.type; });
+  if (activeFilters.service) result = result.filter(function(ag) { return ag.services && ag.services.indexOf(activeFilters.service) !== -1; });
+  if (activeFilters.search)  result = result.filter(function(ag) {
+    var q = activeFilters.search;
+    return normalize(ag.name).indexOf(q) !== -1 ||
+           normalize(ag.city).indexOf(q) !== -1 ||
+           normalize(ag.wilaya).indexOf(q) !== -1 ||
+           normalize(ag.address).indexOf(q) !== -1;
   });
-
-  /* ── Render sécurisé ── */
-  if (typeof renderFilterCards === 'function') {
-    renderFilterCards(result);
-  }
+  renderFilterCards(result);
 }
-activeFilters.search = normalize(val || '');
-/* ============================================================
-   FILTER TAGS
-============================================================ */
+
 function updateFilterTags() {
   var row = document.getElementById('filterTagsRow');
   if (!row) return;
-
   var tags = [];
-
-  if (activeFilters.wilaya) {
-    tags.push({ key: 'wilaya', label: '📍 Wilaya: ' + activeFilters.wilaya });
-  }
-
-  if (activeFilters.city) {
-    tags.push({ key: 'city', label: '🏙 City: ' + activeFilters.city });
-  }
-
-  if (activeFilters.type) {
-    tags.push({ key: 'type', label: '🏢 Type: ' + activeFilters.type });
-  }
-
-  if (activeFilters.service) {
-    tags.push({ key: 'service', label: '⚙ ' + activeFilters.service });
-  }
-
-  if (activeFilters.search) {
-    tags.push({ key: 'search', label: '🔍 "' + activeFilters.search + '"' });
-  }
-
-  /* ── Aucun filtre ── */
-  if (!tags.length) {
-    row.innerHTML = '';
-    row.style.display = 'none';
-    return;
-  }
-
-  /* ── Affichage ── */
+  if (activeFilters.wilaya)  tags.push({ key: 'wilaya',  label: '📍 Wilaya: ' + activeFilters.wilaya });
+  if (activeFilters.city)    tags.push({ key: 'city',    label: '🏙 City: '   + activeFilters.city   });
+  if (activeFilters.type)    tags.push({ key: 'type',    label: '🏢 Type: '   + activeFilters.type   });
+  if (activeFilters.service) tags.push({ key: 'service', label: '⚙ '         + activeFilters.service });
+  if (activeFilters.search)  tags.push({ key: 'search',  label: '🔍 "' + activeFilters.search + '"'  });
+  if (!tags.length) { row.innerHTML = ''; row.style.display = 'none'; return; }
   row.style.display = 'flex';
-
   row.innerHTML = tags.map(function(t) {
-    return (
-      '<span class="filter-tag" onclick="clearTag(\'' + t.key + '\')">' +
-        t.label +
-        ' <span class="filter-tag-x">✕</span>' +
-      '</span>'
-    );
+    return '<span class="filter-tag" onclick="clearTag(\'' + t.key + '\')">' + t.label + ' <span class="filter-tag-x">✕</span></span>';
   }).join('');
 }
 
-
-/* ============================================================
-   CLEAR SINGLE TAG
-============================================================ */
 function clearTag(key) {
   activeFilters[key] = '';
-
-  var labels = {
-    wilaya: 'Wilaya',
-    city: 'City',
-    type: 'Agency Type',
-    service: 'Services'
-  };
-
-  /* ── Reset label dropdown ── */
+  var labels = { wilaya: 'Wilaya', city: 'City', type: 'Agency Type', service: 'Services' };
   var lbl = document.getElementById('fdlbl-' + key);
   if (lbl) lbl.textContent = labels[key] || key;
-
-  /* ── Cas SEARCH ── */
   if (key === 'search') {
     var inp = document.getElementById('fdSearchInput');
     if (inp) inp.value = '';
-
     var clr = document.getElementById('fdSearchClear');
     if (clr) clr.style.display = 'none';
   }
-
-  /* ── Reset dropdown items ── */
   var menu = document.getElementById('fdm-' + key);
   if (menu) {
-    menu.querySelectorAll('.fd-item').forEach(function(i) {
-      i.classList.remove('active');
-    });
-
+    menu.querySelectorAll('.fd-item').forEach(function(i) { i.classList.remove('active'); });
     var all = menu.querySelector('.fd-item-all');
     if (all) all.classList.add('active');
   }
-
-  /* ── Cas WILAYA (reset city lié) ── */
   if (key === 'wilaya') {
     activeFilters.city = '';
-
-    var cityLbl = document.getElementById('fdlbl-city');
-    if (cityLbl) cityLbl.textContent = 'City';
-
-    if (typeof buildCityDropdown === 'function') {
-      buildCityDropdown('');
-    }
+    var cl = document.getElementById('fdlbl-city');
+    if (cl) cl.textContent = 'City';
+    buildCityDropdown('');
   }
-
-  /* ── Re-apply ── */
   applyFilters();
   updateFilterTags();
 }
 
-/* ============================================================
-   RESET ALL FILTERS (SAFE VERSION)
-============================================================ */
 function resetFilters() {
-
-  /* ── Reset state ── */
-  Object.keys(activeFilters).forEach(function(k) {
-    activeFilters[k] = '';
-  });
-
-  /* ── Reset search input ── */
+  Object.keys(activeFilters).forEach(function(k) { activeFilters[k] = ''; });
   var inp = document.getElementById('fdSearchInput');
   if (inp) inp.value = '';
-
   var clr = document.getElementById('fdSearchClear');
   if (clr) clr.style.display = 'none';
-
-  /* ── Reset dropdown labels + items ── */
-  var labels = {
-    wilaya: 'Wilaya',
-    city: 'City',
-    type: 'Agency Type',
-    service: 'Services'
-  };
-
   ['wilaya', 'city', 'type', 'service'].forEach(function(key) {
-
-    /* label */
+    var labels = { wilaya: 'Wilaya', city: 'City', type: 'Agency Type', service: 'Services' };
     var lbl = document.getElementById('fdlbl-' + key);
     if (lbl) lbl.textContent = labels[key];
-
-    /* dropdown items */
     var menu = document.getElementById('fdm-' + key);
     if (menu) {
-      menu.querySelectorAll('.fd-item').forEach(function(i) {
-        i.classList.remove('active');
-      });
-
+      menu.querySelectorAll('.fd-item').forEach(function(i) { i.classList.remove('active'); });
       var all = menu.querySelector('.fd-item-all');
       if (all) all.classList.add('active');
     }
-
-    /* close dropdown */
-    var drop = document.getElementById('fd-' + key);
-    if (drop) drop.classList.remove('open');
   });
-
-  /* ── Reset dependent dropdown (city) ── */
-  if (typeof buildCityDropdown === 'function') {
-    buildCityDropdown('');
-  }
-
-  /* ── Update UI ── */
+  buildCityDropdown('');
   updateFilterTags();
-
-  /* ── Re-render ── */
-  if (typeof renderFilterCards === 'function') {
-    renderFilterCards(AGENCIES);
-  }
-
-  /* ── Reset map ── */
-  if (typeof filterMap !== 'undefined' && filterMap) {
-    filterMap.flyTo([28.0339, 1.6596], 6, {
-      animate: true,
-      duration: 1
-    });
-  }
-
-  /* ── Reset icons (important 🔥) ── */
-  if (typeof resetFilterIcons === 'function') {
-    resetFilterIcons();
-  }
+  renderFilterCards(AGENCIES);
+  filterMap.flyTo([28.0339, 1.6596], 6, { animate: true, duration: 1 });
 }
-filterMap.flyTo([28.0339, 1.6596], 6, {
-  animate: true,
-  duration: 1.2,
-  easeLinearity: 0.25
-});
 
 /* ============================================================
    GEOLOCATION
 ============================================================ */
 function useMyLocation() {
   var btn = document.getElementById('locateBtn');
-  if (!navigator.geolocation) {
-    alert('Geolocation not supported.');
-    return;
-  }
-
-  if (btn) {
-    btn.classList.add('loading');
-    var span = btn.querySelector('span');
-    if (span) span.textContent = 'Locating…';
-  }
-
+  if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
+  btn.classList.add('loading');
+  btn.querySelector('span').textContent = 'Locating…';
   navigator.geolocation.getCurrentPosition(
-
-    /* ── SUCCESS ── */
     function(pos) {
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-
-      var nearest = null;
-      var minDist = Infinity;
-
-      /* ── Find nearest agency ── */
+      var lat = pos.coords.latitude, lng = pos.coords.longitude;
+      var nearest = null, minDist = Infinity;
       AGENCIES.forEach(function(ag) {
         var d = Math.pow(ag.lat - lat, 2) + Math.pow(ag.lng - lng, 2);
-        if (d < minDist) {
-          minDist = d;
-          nearest = ag;
-        }
+        if (d < minDist) { minDist = d; nearest = ag; }
       });
-
-      /* ── Reset button ── */
-      if (btn) {
-        btn.classList.remove('loading');
-        var span = btn.querySelector('span');
-        if (span) span.textContent = 'Use my location';
-      }
-
-      if (!nearest) return;
-
-      /* ── Show user location ── */
-      if (typeof heroMap !== 'undefined' && heroMap) {
-
-        heroMap.flyTo([nearest.lat, nearest.lng], 13, {
-          animate: true,
-          duration: 1.5
-        });
-
-        /* remove old marker if exists */
-        if (window.__userMarker) {
-          heroMap.removeLayer(window.__userMarker);
-        }
-
-        window.__userMarker = L.circleMarker([lat, lng], {
-          radius: 8,
-          color: '#2563eb',
-          fillColor: '#3b82f6',
-          fillOpacity: 1,
-          weight: 3
-        })
-        .addTo(heroMap)
-        .bindPopup('<strong>Your location</strong>')
-        .openPopup();
-      }
-
-      /* ── Focus nearest agency ── */
-      if (typeof flyToFilterAgency === 'function') {
+      btn.classList.remove('loading');
+      btn.querySelector('span').textContent = 'Use my location';
+      if (nearest) {
+        heroMap.flyTo([nearest.lat, nearest.lng], 13, { animate: true, duration: 1.5 });
+        L.circleMarker([lat, lng], { radius: 8, color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 })
+          .addTo(heroMap).bindPopup('<strong>Your location</strong>').openPopup();
         flyToFilterAgency(nearest.id);
-      }
-
-      /* ── Scroll to results ── */
-      var section = document.getElementById('filterSection');
-      if (section) {
-        section.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('filterSection').scrollIntoView({ behavior: 'smooth' });
       }
     },
-
-    /* ── ERROR ── */
-    function(err) {
-      if (btn) {
-        btn.classList.remove('loading');
-        var span = btn.querySelector('span');
-        if (span) span.textContent = 'Use my location';
-      }
-
-      console.warn('[Geo]', err);
-
+    function() {
+      btn.classList.remove('loading');
+      btn.querySelector('span').textContent = 'Use my location';
       alert('Could not get your location. Please allow location access.');
     },
-
-    /* ── OPTIONS ── */
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 60000
-    }
+    { timeout: 10000, maximumAge: 60000 }
   );
 }
 
-
 /* ============================================================
-   BOOT — SAFE INIT
+   BOOT — page-specific only
 ============================================================ */
 window.addEventListener('load', function() {
-
-  /* ── Build dropdowns ── */
-  if (typeof buildWilayaDropdown === 'function') {
-    buildWilayaDropdown();
-  }
-
-  if (typeof buildCityDropdown === 'function') {
-    buildCityDropdown('');
-  }
-
-  /* ── Init maps ── */
-  if (typeof initHeroMap === 'function') {
-    initHeroMap();
-  }
-
-  if (typeof initFilterMap === 'function') {
-    initFilterMap();
-  }
+  buildWilayaDropdown();
+  buildCityDropdown('');
+  initHeroMap();
+  initFilterMap();
 });
-function getDistance(lat1, lon1, lat2, lon2) {
-  var R = 6371;
-  var dLat = (lat2 - lat1) * Math.PI / 180;
-  var dLon = (lon2 - lon1) * Math.PI / 180;
-
-  var a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
 
 /* ══════════════════════════════════════════════════════════════
-   ARTICLE PAGE — SCROLL REVEAL (SAFE & CLEAN)
+   ARTICLE PAGE — SCROLL REVEAL
 ══════════════════════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', function () {
 
   var sections = document.querySelectorAll('.article-section, .article-keypoints');
-  if (!sections.length) return; // ⛔ seulement sur pages article
+  if (!sections.length) return; // ⛔ important → seulement pour pages article
 
-  var observer = new IntersectionObserver(function(entries, obs) {
+  var observer = new IntersectionObserver(function(entries) {
     entries.forEach(function(entry) {
       if (entry.isIntersecting) {
         entry.target.classList.add('is-visible');
-        obs.unobserve(entry.target);
+        observer.unobserve(entry.target);
       }
     });
   }, {
@@ -2410,18 +1649,31 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
 });
+(function() {
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
 
-
-/* ══════════════════════════════════════════════════════════════
+    document.querySelectorAll('.article-section, .article-keypoints').forEach(function(el, i) {
+      el.style.transitionDelay = (i * 0.06) + 's';
+      observer.observe(el);
+    });
+  })();
+  /* ════════════════════════════════════
    PAGE: NEWS & ARTICLES
-══════════════════════════════════════════════════════════════ */
+   (auto-run only if elements exist)
+════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', function () {
 
   /* ===============================
      ADVICE SWITCH
   =============================== */
-
   var currentAdviceKey = 'road';
 
   window.switchAdvice = function (key, btn) {
@@ -2432,68 +1684,52 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!currentCard || !nextCard) return;
 
-    // animation sortie
     currentCard.classList.add('is-leaving');
     currentCard.classList.remove('is-active');
 
     setTimeout(function() {
-
       currentCard.classList.remove('is-leaving');
 
-      // reset boutons
       document.querySelectorAll('.advice-category-btn').forEach(function(b) {
         b.classList.remove('is-active');
         b.setAttribute('aria-selected', 'false');
       });
 
-      // activer bouton courant
-      if (btn) {
-        btn.classList.add('is-active');
-        btn.setAttribute('aria-selected', 'true');
-      }
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
 
-      // afficher nouvelle carte
       nextCard.classList.add('is-active');
-
       currentAdviceKey = key;
-
     }, 200);
   };
 
-});
-
-
-  document.addEventListener('DOMContentLoaded', function () {
 
   /* ===============================
      SCROLL REVEAL
   =============================== */
   var revealEls = document.querySelectorAll('.scroll-reveal, .scroll-reveal-group');
 
-  if (revealEls.length) {
-    var revealObserver = new IntersectionObserver(function(entries, obs) {
+  if (revealEls.length > 0) {
+    var observer = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
           entry.target.classList.add('is-revealed');
-          obs.unobserve(entry.target);
+          observer.unobserve(entry.target);
         }
       });
-    }, {
-      threshold: 0.12,
-      rootMargin: '0px 0px -40px 0px'
-    });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
     revealEls.forEach(function(el) {
-      revealObserver.observe(el);
+      observer.observe(el);
     });
   }
+
 
   /* ===============================
      ARTICLES SYSTEM
   =============================== */
-
   var gridEl = document.getElementById('articles-grid');
-  if (!gridEl) return; // 🚨 exécute seulement sur la page articles
+  if (!gridEl) return; // 🚨 IMPORTANT: run only on this page
 
   var articles = [
     {
@@ -2555,327 +1791,94 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var PER_PAGE = 4;
   var currentPage = 1;
-  var totalPages = Math.ceil(articles.length / PER_PAGE);
+  var totalPages  = Math.ceil(articles.length / PER_PAGE);
 
-  var wrapEl       = gridEl.closest('.articles-grid-wrap');
+  var wrapEl = gridEl.closest('.articles-grid-wrap');
   var paginationEl = document.getElementById('articles-pagination');
-  var detailEl     = document.getElementById('article-detail');
-  var listView     = document.getElementById('articles-list-view');
+  var detailEl = document.getElementById('article-detail');
+  var listView = document.getElementById('articles-list-view');
 
-  /* ===============================
-     RENDER ARTICLES
-  =============================== */
-  function renderArticles(page) {
-    var start = (page - 1) * PER_PAGE;
-    var pageItems = articles.slice(start, start + PER_PAGE);
+  function renderPage(page) {
+    wrapEl.classList.remove('is-visible');
 
-    gridEl.innerHTML = pageItems.map(function(a) {
-      return `
-        <div class="article-card" onclick="openArticle('${a.id}')">
-          <div class="article-img">
-            <img src="${a.image}" alt="${a.title}">
-          </div>
-          <div class="article-body">
-            <div class="article-meta">${a.emoji} ${a.category} • ${a.date}</div>
-            <div class="article-title">${a.title}</div>
-            <div class="article-excerpt">${a.excerpt}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    setTimeout(function() {
+      currentPage = page;
+      var slice = articles.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+      gridEl.innerHTML = '';
+
+      slice.forEach(function(art) {
+        var card = document.createElement('div');
+        card.className = 'article-card';
+
+        card.innerHTML =
+          '<div class="article-card__body">' +
+            '<span>' + art.category + '</span>' +
+            '<h3>' + art.title + '</h3>' +
+            '<p>' + art.excerpt + '</p>' +
+          '</div>';
+
+        card.addEventListener('click', function() {
+          openDetail(art.id);
+        });
+
+        gridEl.appendChild(card);
+      });
+
+      renderPagination();
+      wrapEl.classList.add('is-visible');
+    }, 200);
   }
 
-  /* ===============================
-     PAGINATION
-  =============================== */
   function renderPagination() {
-    if (!paginationEl) return;
-
     paginationEl.innerHTML = '';
-
-    for (let i = 1; i <= totalPages; i++) {
+    for (var i = 1; i <= totalPages; i++) {
       var btn = document.createElement('button');
       btn.textContent = i;
-      btn.className = 'pagination-btn' + (i === currentPage ? ' active' : '');
 
-      btn.addEventListener('click', function() {
-        currentPage = i;
-        renderArticles(currentPage);
-        renderPagination();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
+      if (i === currentPage) btn.classList.add('is-active');
+
+      btn.addEventListener('click', (function(p) {
+        return function() { renderPage(p); };
+      })(i));
 
       paginationEl.appendChild(btn);
     }
   }
 
-  /* ===============================
-     OPEN ARTICLE
-  =============================== */
-  window.openArticle = function(id) {
-    var article = articles.find(function(a) { return a.id === id; });
-    if (!article || !detailEl || !listView) return;
+  function openDetail(id) {
+    var art = articles.find(function(a) { return a.id === id; });
+    if (!art) return;
 
-    detailEl.innerHTML = `
-      <div class="article-detail-inner">
-        <button class="back-btn" onclick="closeArticle()">← Back</button>
-        <h1>${article.title}</h1>
-        <div class="article-meta">${article.emoji} ${article.category} • ${article.date}</div>
-        <img src="${article.image}" alt="${article.title}">
-        <div class="article-content">${article.content}</div>
-      </div>
-    `;
+    document.getElementById('detail-title').textContent = art.title;
+    document.getElementById('detail-text').innerHTML = art.content;
 
     listView.style.display = 'none';
-    detailEl.style.display = 'block';
+    detailEl.classList.remove('is-hidden');
+  }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.closeArticleDetail = function () {
+    detailEl.classList.add('is-hidden');
+    listView.style.display = '';
   };
 
-  /* ===============================
-     CLOSE ARTICLE
-  =============================== */
-  window.closeArticle = function() {
-    if (!detailEl || !listView) return;
-
-    detailEl.style.display = 'none';
-    listView.style.display = 'block';
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /* ===============================
-     INIT
-  =============================== */
-  renderArticles(currentPage);
-  renderPagination();
+  renderPage(1);
 
 });
-  document.addEventListener('DOMContentLoaded', function () {
+/* ════════════════════════════════════
+   ARTICLE PAGES — scroll reveal
+════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function () {
 
-  /* ===============================
-     SCROLL REVEAL
-  =============================== */
-  var revealEls = document.querySelectorAll('.scroll-reveal, .scroll-reveal-group');
+  var sections = document.querySelectorAll('.article-section, .article-keypoints');
 
-  if (revealEls.length) {
-    var revealObserver = new IntersectionObserver(function(entries, obs) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-revealed');
-          obs.unobserve(entry.target);
-        }
-      });
-    }, {
-      threshold: 0.12,
-      rootMargin: '0px 0px -40px 0px'
-    });
+  // 🚨 important: run only if article page
+  if (sections.length === 0) return;
 
-    revealEls.forEach(function(el) {
-      revealObserver.observe(el);
-    });
-  }
-
-  /* ===============================
-     ARTICLES SYSTEM
-  =============================== */
-
-  var gridEl = document.getElementById('articles-grid');
-  if (!gridEl) return; // 🚨 exécute seulement sur la page articles
-
-  var articles = [
-    {
-      id: 'agency602',
-      category: 'PRESS',
-      title: 'Agency 602 Renovated – Didouche Mourad',
-      excerpt: 'CAAR modernized Agency 602 in Didouche Mourad to enhance customer experience.',
-      date: 'Sep 24, 2023',
-      image: 'img/art1.png',
-      emoji: '🏢',
-      isLatest: false,
-      content: '<p>Renovation completed with modern design and better service.</p>'
-    },
-    {
-      id: 'agency228',
-      category: 'PRESS',
-      title: 'Agency 228 Renovated – Larbâa Nath Irathen',
-      excerpt: 'Part of CAAR network modernization.',
-      date: 'Sep 25, 2023',
-      image: 'img/art2.png',
-      emoji: '🏢',
-      isLatest: false,
-      content: '<p>Improved environment for customer service.</p>'
-    },
-    {
-      id: 'bejaia',
-      category: 'EVENT',
-      title: 'CAAR Information Day in Béjaïa',
-      excerpt: 'Event with regional partners.',
-      date: 'Oct 4, 2023',
-      image: 'img/art3.png',
-      emoji: '📅',
-      isLatest: false,
-      content: '<p>Partners gathered for CAAR anniversary event.</p>'
-    },
-    {
-      id: 'sada2025',
-      category: 'PARTNERSHIP',
-      title: 'CAAR at SADA 2025',
-      excerpt: 'African Business Forum participation.',
-      date: 'Apr 28, 2025',
-      image: 'img/art4.png',
-      emoji: '🤝',
-      isLatest: false,
-      content: '<p>Strengthened presence in Africa.</p>'
-    },
-    {
-      id: 'tiziagri',
-      category: 'EVENT',
-      title: 'TIZI AGRI EXPO 2025',
-      excerpt: 'Support for agriculture sector.',
-      date: 'May 10, 2025',
-      image: 'img/art5.png',
-      emoji: '🌾',
-      isLatest: true,
-      content: '<p>Showcase of agricultural insurance products.</p>'
-    }
-  ];
-
-  var PER_PAGE = 4;
-  var currentPage = 1;
-  var totalPages = Math.ceil(articles.length / PER_PAGE);
-
-  var wrapEl       = gridEl.closest('.articles-grid-wrap');
-  var paginationEl = document.getElementById('articles-pagination');
-  var detailEl     = document.getElementById('article-detail');
-  var listView     = document.getElementById('articles-list-view');
-
-  /* ===============================
-     RENDER ARTICLES
-  =============================== */
-  function renderArticles(page) {
-    var start = (page - 1) * PER_PAGE;
-    var pageItems = articles.slice(start, start + PER_PAGE);
-
-    gridEl.innerHTML = pageItems.map(function(a) {
-      return `
-        <div class="article-card" onclick="openArticle('${a.id}')">
-          <div class="article-img">
-            <img src="${a.image}" alt="${a.title}">
-          </div>
-          <div class="article-body">
-            <div class="article-meta">${a.emoji} ${a.category} • ${a.date}</div>
-            <div class="article-title">${a.title}</div>
-            <div class="article-excerpt">${a.excerpt}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  /* ===============================
-     PAGINATION
-  =============================== */
-  function renderPagination() {
-    if (!paginationEl) return;
-
-    paginationEl.innerHTML = '';
-
-    for (let i = 1; i <= totalPages; i++) {
-      var btn = document.createElement('button');
-      btn.textContent = i;
-      btn.className = 'pagination-btn' + (i === currentPage ? ' active' : '');
-
-      btn.addEventListener('click', function() {
-        currentPage = i;
-        renderArticles(currentPage);
-        renderPagination();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-
-      paginationEl.appendChild(btn);
-    }
-  }
-
-  /* ===============================
-     OPEN ARTICLE
-  =============================== */
-  window.openArticle = function(id) {
-    var article = articles.find(function(a) { return a.id === id; });
-    if (!article || !detailEl || !listView) return;
-
-    detailEl.innerHTML = `
-      <div class="article-detail-inner">
-        <button class="back-btn" onclick="closeArticle()">← Back</button>
-        <h1>${article.title}</h1>
-        <div class="article-meta">${article.emoji} ${article.category} • ${article.date}</div>
-        <img src="${article.image}" alt="${article.title}">
-        <div class="article-content">${article.content}</div>
-      </div>
-    `;
-
-    listView.style.display = 'none';
-    detailEl.style.display = 'block';
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /* ===============================
-     CLOSE ARTICLE
-  =============================== */
-  window.closeArticle = function() {
-    if (!detailEl || !listView) return;
-
-    detailEl.style.display = 'none';
-    listView.style.display = 'block';
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /* ===============================
-     INIT
-  =============================== */
-  renderArticles(currentPage);
-  renderPagination();
-
-});
-/* =========================================
-   HEADER (injecté dynamiquement)
-========================================= */
-(function () {
-  var container = document.getElementById('site-header');
-  if (!container) return; // sécurité
-
-  container.innerHTML = `
-    <header class="site-header">
-      <div class="header-inner">
-        <a href="index.html" class="logo">CAAR</a>
-        <nav class="nav">
-          <a href="index.html">Home</a>
-          <a href="news.html">News</a>
-          <a href="company.html">Company</a>
-        </nav>
-      </div>
-    </header>
-  `;
-})();
-
-
-/* =========================================
-   SCROLL REVEAL (global safe version)
-========================================= */
-(function () {
-  var elements = document.querySelectorAll(
-    '.article-section, .article-keypoints, .scroll-reveal, .scroll-reveal-group'
-  );
-
-  if (!elements.length) return;
-
-  var revealObserver = new IntersectionObserver(function(entries, obs) {
+  var observer = new IntersectionObserver(function(entries) {
     entries.forEach(function(entry) {
       if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible', 'is-revealed');
-        obs.unobserve(entry.target);
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
       }
     });
   }, {
@@ -2883,9 +1886,53 @@ document.addEventListener('DOMContentLoaded', function () {
     rootMargin: '0px 0px -30px 0px'
   });
 
+  sections.forEach(function(el, i) {
+    el.style.transitionDelay = (i * 0.06) + 's';
+    observer.observe(el);
+  });
+
+});
+/* =========================================
+   HEADER (injecté dynamiquement)
+========================================= */
+(function () {
+  var header = `
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">CAAR</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="news.html">News</a>
+        <a href="company.html">Company</a>
+      </nav>
+    </div>
+  </header>
+  `;
+  var container = document.getElementById('site-header');
+  if (container) container.innerHTML = header;
+})();
+
+
+/* =========================================
+   SCROLL REVEAL (articles pages)
+========================================= */
+(function () {
+  var elements = document.querySelectorAll('.article-section, .article-keypoints, .scroll-reveal, .scroll-reveal-group');
+
+  if (!elements.length) return;
+
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible', 'is-revealed');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
+
   elements.forEach(function(el, i) {
     el.style.transitionDelay = (i * 0.05) + 's';
-    revealObserver.observe(el);
+    observer.observe(el);
   });
 })();
 
@@ -2894,8 +1941,7 @@ document.addEventListener('DOMContentLoaded', function () {
    ADVICE SWITCH (news.html)
 ========================================= */
 (function () {
-  var firstCard = document.getElementById('advice-road');
-  if (!firstCard) return; // run only on news page
+  if (!document.getElementById('advice-road')) return;
 
   var currentAdviceKey = 'road';
 
@@ -2903,47 +1949,35 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === currentAdviceKey) return;
 
     var currentCard = document.getElementById('advice-' + currentAdviceKey);
-    var nextCard    = document.getElementById('advice-' + key);
+    var nextCard = document.getElementById('advice-' + key);
 
-    if (!currentCard || !nextCard) return; // sécurité
-
-    // animation sortie
     currentCard.classList.add('is-leaving');
     currentCard.classList.remove('is-active');
 
     setTimeout(function () {
       currentCard.classList.remove('is-leaving');
 
-      // reset boutons
       document.querySelectorAll('.advice-category-btn').forEach(function (b) {
         b.classList.remove('is-active');
         b.setAttribute('aria-selected', 'false');
       });
 
-      // activer bouton cliqué
-      if (btn) {
-        btn.classList.add('is-active');
-        btn.setAttribute('aria-selected', 'true');
-      }
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
 
-      // afficher nouvelle carte
       nextCard.classList.add('is-active');
       currentAdviceKey = key;
-
     }, 200);
   };
 })();
+
+
 /* =========================================
    ARTICLES (news.html pagination + detail)
 ========================================= */
 (function () {
-
   var gridEl = document.getElementById('articles-grid');
   if (!gridEl) return;
-
-  var paginationEl = document.getElementById('articles-pagination');
-  var detailEl = document.getElementById('article-detail');
-  var listView = document.getElementById('articles-list-view');
 
   var articles = [
     {
@@ -2990,10 +2024,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var PER_PAGE = 4;
   var currentPage = 1;
+  var paginationEl = document.getElementById('articles-pagination');
 
-  /* ===============================
-     RENDER PAGE
-  =============================== */
   function renderPage(page) {
     currentPage = page;
     gridEl.innerHTML = '';
@@ -3016,19 +2048,9 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
       `;
 
-      // click bouton seulement (meilleure UX)
-      var btn = card.querySelector('.article-card__read-btn');
-      if (btn) {
-        btn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          openDetail(art);
-        });
-      }
-
-      // click carte
-      card.addEventListener('click', function () {
+      card.onclick = function () {
         openDetail(art);
-      });
+      };
 
       gridEl.appendChild(card);
     });
@@ -3036,12 +2058,8 @@ document.addEventListener('DOMContentLoaded', function () {
     renderPagination();
   }
 
-  /* ===============================
-     PAGINATION
-  =============================== */
   function renderPagination() {
     if (!paginationEl) return;
-
     paginationEl.innerHTML = '';
 
     var totalPages = Math.ceil(articles.length / PER_PAGE);
@@ -3050,61 +2068,19 @@ document.addEventListener('DOMContentLoaded', function () {
       var btn = document.createElement('button');
       btn.textContent = i;
       btn.className = (i === currentPage) ? 'is-active' : '';
-
-      btn.addEventListener('click', function () {
-        renderPage(i);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-
+      btn.onclick = function () { renderPage(i); };
       paginationEl.appendChild(btn);
     }
   }
 
-  /* ===============================
-     DETAIL VIEW (PRO)
-  =============================== */
   function openDetail(art) {
-    if (!detailEl || !listView) {
-      alert(art.title + "\n\n" + art.excerpt);
-      return;
-    }
-
-    detailEl.innerHTML = `
-      <div class="article-detail-inner">
-        <button class="back-btn">← Back</button>
-        <h1>${art.title}</h1>
-        <div class="article-meta">${art.emoji} ${art.category} • ${art.date}</div>
-        <img src="${art.image}" alt="${art.title}">
-        <div class="article-content">${art.content}</div>
-      </div>
-    `;
-
-    listView.style.display = 'none';
-    detailEl.style.display = 'block';
-
-    var backBtn = detailEl.querySelector('.back-btn');
-    if (backBtn) {
-      backBtn.addEventListener('click', closeDetail);
-    }
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    alert(art.title + "\n\n" + art.excerpt);
   }
 
-  function closeDetail() {
-    if (!detailEl || !listView) return;
-
-    detailEl.style.display = 'none';
-    listView.style.display = 'block';
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  /* ===============================
-     INIT
-  =============================== */
   renderPage(1);
-
 })();
+
+<script>
 /* ============================================================
    AGENCY DATA
    ============================================================ */
@@ -3426,11 +2402,11 @@ function updateAgencyList() {
 
 /* ============================================================
    STEP NAVIGATION
-============================================================ */
+   ============================================================ */
 function goToStep(n) {
   if (n < 1 || n > 4) return;
 
-  // Validation
+  // Validate before advancing
   if (currentStep === 1 && n === 2) {
     if (!validateStep1()) return;
     populateStep2Summary();
@@ -3440,22 +2416,16 @@ function goToStep(n) {
     populatePayment();
   }
 
-  var currentEl = document.getElementById('form-step-' + currentStep);
-  if (currentEl) currentEl.classList.add('hidden');
-
+  // Hide current, show next
+  document.getElementById('form-step-' + currentStep).classList.add('hidden');
   currentStep = n;
+  document.getElementById('form-step-' + currentStep).classList.remove('hidden');
 
-  var nextEl = document.getElementById('form-step-' + currentStep);
-  if (nextEl) nextEl.classList.remove('hidden');
-
-  // Indicators
+  // Update step indicators
   for (var i = 1; i <= 4; i++) {
     var ind = document.getElementById('step-indicator-' + i);
-    if (!ind) continue;
-
     ind.classList.remove('active', 'done');
-
-    if (i < currentStep) ind.classList.add('done');
+    if (i < currentStep)      ind.classList.add('done');
     else if (i === currentStep) ind.classList.add('active');
   }
 
@@ -3464,153 +2434,334 @@ function goToStep(n) {
 
 /* ============================================================
    VALIDATION
-============================================================ */
+   ============================================================ */
 function validateStep1() {
-  var year  = parseInt(document.getElementById('year_construction')?.value);
-  var area  = parseFloat(document.getElementById('built_area')?.value);
-  var value = parseFloat(document.getElementById('declared_value')?.value);
-  var terms = document.getElementById('terms-consent')?.checked;
+  var year  = document.getElementById('year_construction').value;
+  var area  = document.getElementById('built_area').value;
+  var value = document.getElementById('declared_value').value;
 
-  if (!year || year < 1900 || year > new Date().getFullYear()) {
-    alert('Please enter a valid year of construction.');
+  if (!year || parseInt(year) < 1900 || parseInt(year) > 2026) {
+    alert('Please enter a valid year of construction (1900–2026).');
     return false;
   }
-  if (!area || area <= 0) {
+  if (!area || parseFloat(area) <= 0) {
     alert('Please enter the total built area in m².');
     return false;
   }
-  if (!value || value <= 0) {
+  if (!value || parseFloat(value) <= 0) {
     alert('Please enter the declared value.');
     return false;
   }
-  if (!terms) {
-    alert('Please accept the general terms.');
+  if (!document.getElementById('terms-consent').checked) {
+    alert('Please accept the general terms and conditions to continue.');
     return false;
   }
-
   return true;
 }
 
 function validateStep2() {
-  var last  = document.getElementById('last_name')?.value.trim() || '';
-  var first = document.getElementById('first_name')?.value.trim() || '';
-  var email = document.getElementById('email')?.value.trim() || '';
-  var conf  = document.getElementById('confirm_email')?.value.trim() || '';
-  var mob1  = document.getElementById('mobile_1')?.value.trim() || '';
-  var addr  = document.getElementById('address')?.value.trim() || '';
-  var paddr = document.getElementById('property_address')?.value.trim() || '';
+  var last  = document.getElementById('last_name').value.trim();
+  var first = document.getElementById('first_name').value.trim();
+  var email = document.getElementById('email').value.trim();
+  var conf  = document.getElementById('confirm_email').value.trim();
+  var mob1  = document.getElementById('mobile_1').value.trim();
+  var addr  = document.getElementById('address').value.trim();
+  var paddr = document.getElementById('property_address').value.trim();
 
-  if (!last || !first) { alert('Enter full name'); return false; }
-  if (!/^\S+@\S+\.\S+$/.test(email)) { alert('Invalid email'); return false; }
-  if (email !== conf) { alert('Emails do not match'); return false; }
-  if (!mob1) { alert('Enter mobile number'); return false; }
-  if (!addr) { alert('Enter address'); return false; }
-  if (!paddr) { alert('Enter property address'); return false; }
-
+  if (!last || !first)         { alert('Please enter your full name.'); return false; }
+  if (!email)                  { alert('Please enter your email address.'); return false; }
+  if (email !== conf)          { alert('Email addresses do not match.'); return false; }
+  if (!mob1)                   { alert('Please enter your mobile number.'); return false; }
+  if (!addr)                   { alert('Please enter your address.'); return false; }
+  if (!paddr)                  { alert('Please enter the insured property address.'); return false; }
   return true;
 }
 
 function validateReview() {
-  if (!document.getElementById('confirm-info')?.checked) {
-    alert('Please confirm info.');
+  if (!document.getElementById('confirm-info').checked) {
+    alert('Please confirm that all information is correct.');
     return false;
   }
-  if (!document.getElementById('confirm-terms')?.checked) {
-    alert('Please accept terms.');
+  if (!document.getElementById('confirm-terms').checked) {
+    alert('Please accept the general terms and conditions.');
     return false;
   }
   return true;
 }
 
 /* ============================================================
-   REVIEW SWITCH
-============================================================ */
+   SHOW / HIDE REVIEW vs FORM (Step 2)
+   ============================================================ */
 function showReviewView() {
   if (!validateStep2()) return;
-
   populateReview();
-
-  var form = document.getElementById('subscription-form-view');
-  var rev  = document.getElementById('subscription-review-view');
-
-  if (form) form.classList.add('hidden');
-  if (rev)  rev.classList.remove('hidden');
-
+  document.getElementById('subscription-form-view').classList.add('hidden');
+  document.getElementById('subscription-review-view').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 function showSubscriptionForm() {
-  var form = document.getElementById('subscription-form-view');
-  var rev  = document.getElementById('subscription-review-view');
-
-  if (rev)  rev.classList.add('hidden');
-  if (form) form.classList.remove('hidden');
-
+  document.getElementById('subscription-review-view').classList.add('hidden');
+  document.getElementById('subscription-form-view').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ============================================================
-   PAYMENT
-============================================================ */
+   PAYMENT VALIDATION → go to Step 4
+   ============================================================ */
 function validatePayment() {
-  var card = document.getElementById('card_number')?.value.replace(/\s/g, '') || '';
-  var cvv  = document.getElementById('cvv2')?.value.trim() || '';
-  var name = document.getElementById('cardholder_name')?.value.trim() || '';
-  var month = document.getElementById('expiry_month')?.value;
-  var year  = document.getElementById('expiry_year')?.value;
+  var card   = document.getElementById('card_number').value.replace(/\s/g, '');
+  var cvv    = document.getElementById('cvv2').value.trim();
+  var month  = document.getElementById('expiry_month').value;
+  var year   = document.getElementById('expiry_year').value;
+  var name   = document.getElementById('cardholder_name').value.trim();
 
-  if (card.length !== 16) return alert('Invalid card number');
-  if (cvv.length < 3)     return alert('Invalid CVV');
-  if (!month || !year)    return alert('Select expiry date');
-  if (!name)              return alert('Enter cardholder name');
+  if (card.length < 16) { alert('Please enter a valid 16-digit card number.'); return; }
+  if (cvv.length < 3)   { alert('Please enter a valid 3-digit CVV2.'); return; }
+  if (!month)           { alert('Please select an expiry month.'); return; }
+  if (!year)            { alert('Please select an expiry year.'); return; }
+  if (!name)            { alert('Please enter the cardholder name.'); return; }
 
   clearInterval(countdownTimer);
   populateConfirmation();
   goToStep(4);
 }
 
+function resetPaymentForm() {
+  ['card_number','cvv2','cardholder_name'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['expiry_month','expiry_year'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
+}
+
 function formatCardNumber(input) {
-  var val = input.value.replace(/\D/g, '').slice(0, 16);
-  input.value = val.match(/.{1,4}/g)?.join(' ') || val;
+  var val = input.value.replace(/\D/g, '').substr(0, 16);
+  input.value = val.match(/.{1,4}/g) ? val.match(/.{1,4}/g).join(' ') : val;
 }
 
 /* ============================================================
-   CONFIRMATION
-============================================================ */
+   POPULATE CONFIRMATION (Step 4)
+   ============================================================ */
 function populateConfirmation() {
-  var ref = generatePolicyRef();
-  var startD = getStartDate();
-  var endD   = getEndDate();
-
-  var agencyVal = document.getElementById('agency')?.value;
+  var ref       = generatePolicyRef();
+  var startD    = getStartDate();
+  var endD      = getEndDate();
+  var agencyVal = document.getElementById('agency').value;
   var agencyObj = AGENCIES[agencyVal] || {};
 
-  var elRef  = document.getElementById('confirm-policy-ref');
-  var elDate = document.getElementById('confirm-dates');
-  var elAmt  = document.getElementById('confirm-amount');
-  var elMsg  = document.getElementById('confirm-agency-msg');
+  document.getElementById('confirm-policy-ref').textContent = ref;
+  document.getElementById('confirm-dates').textContent      =
+    'Issued: ' + formatDate(startD) + ' · Valid until: ' + formatDate(endD);
+  document.getElementById('confirm-amount').textContent     = formatDZD(premiumData.total);
+  document.getElementById('confirm-agency-msg').textContent =
+    'Agency ' + (agencyObj.name || '') + ' will reach out within 48 hours to finalize your file.';
+}
 
-  if (elRef)  elRef.textContent  = ref;
-  if (elDate) elDate.textContent = 'Issued: ' + formatDate(startD) + ' · Valid until: ' + formatDate(endD);
-  if (elAmt)  elAmt.textContent  = formatDZD(premiumData.total);
-  if (elMsg)  elMsg.textContent  =
-    'Agency ' + (agencyObj.name || '') + ' will contact you within 48h.';
+function downloadCertificate() {
+  alert('Your certificate is being prepared. It will be sent to your email shortly.');
 }
 
 /* ============================================================
-   INIT (SAFE)
-============================================================ */
+   INIT
+   ============================================================ */
+updateAgencyCard();
+calculatePremium();
+
 document.addEventListener('DOMContentLoaded', function () {
-  if (typeof updateAgencyCard === 'function') updateAgencyCard();
-  if (typeof calculatePremium === 'function') calculatePremium();
+
+/* ── Tabs ── */
+window.goToTab = function (key) {
+  document.querySelectorAll('.careers-tab').forEach(function (t) {
+    t.classList.toggle('active', t.dataset.tab === key);
+  });
+  document.querySelectorAll('.careers-tab-content').forEach(function (c) {
+    c.classList.remove('active');
+  });
+  document.getElementById('tab-' + key).classList.add('active');
+  var bar = document.querySelector('.careers-tabs-bar');
+  window.scrollTo({ top: bar.offsetTop - 80, behavior: 'smooth' });
+};
+
+/* ── Jobs ── */
+var HAS_JOBS  = false;
+var JOBS_DATA = [];
+
+window.initJobs = function () {
+  var empty   = document.getElementById('jobsEmptyState');
+  var filters = document.getElementById('jobsFilters');
+  var noFilt  = document.getElementById('noFilterResults');
+
+  if (!empty) return; // ⚠️ important pour éviter erreurs sur autres pages
+
+  if (!HAS_JOBS || !JOBS_DATA.length) {
+    empty.style.display   = 'block';
+    filters.style.display = 'none';
+    noFilt.classList.remove('show');
+    return;
+  }
+
+  empty.style.display   = 'none';
+  filters.style.display = 'flex';
+  renderJobs('All');
+};
+
+window.renderJobs = function (dept) {
+  var list   = document.getElementById('jobsList');
+  var noFilt = document.getElementById('noFilterResults');
+
+  if (!list) return;
+
+  var filtered = dept === 'All'
+    ? JOBS_DATA
+    : JOBS_DATA.filter(function (j) { return j.dept === dept; });
+
+  if (!filtered.length) {
+    list.innerHTML = '';
+    noFilt.classList.add('show');
+    return;
+  }
+
+  noFilt.classList.remove('show');
+
+  list.innerHTML = filtered.map(function (job, i) {
+    return '<div class="job-row">'
+      + '<div class="job-row-accent' + (i % 2 !== 0 ? ' dk' : '') + '"></div>'
+      + '<div class="job-row-body">'
+        + '<div>'
+          + '<div class="job-dept">' + job.dept + '</div>'
+          + '<div class="job-title">' + job.title + '</div>'
+          + '<div class="job-meta">'
+            + '<span>&#128205; ' + job.location + '</span>'
+            + '<span>&#128197; Deadline: ' + job.deadline + '</span>'
+          + '</div>'
+        + '</div>'
+        + '<div class="job-row-right">'
+          + '<span class="job-tag">' + job.type + '</span>'
+          + '<button class="job-apply-btn" onclick="applyForJob(\'' + job.title.replace(/'/g, "\\'") + '\')">Apply</button>'
+        + '</div>'
+      + '</div>'
+    + '</div>';
+  }).join('');
+};
+
+window.filterJobs = function (btn, dept) {
+  document.querySelectorAll('.jf-btn').forEach(function (b) {
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderJobs(dept);
+};
+
+window.applyForJob = function (title) {
+  goToTab('apply');
+  setTimeout(function () {
+    var el = document.getElementById('afPosition');
+    if (el) el.value = title;
+  }, 150);
+};
+
+window.filterAndGo = function (dept) {
+  goToTab('jobs');
+};
+
+/* ── CV Upload ── */
+window.handleCv = function (input) {
+  if (input.files && input.files[0]) {
+    document.getElementById('cvLabel').textContent = input.files[0].name;
+    document.getElementById('cvZone').classList.add('has-file');
+    document.getElementById('cvZone').classList.remove('err');
+    document.getElementById('err-cv').classList.remove('show');
+  }
+};
+
+/* ── Validation ── */
+function setErr(inputId, errId, invalid) {
+  var el  = document.getElementById(inputId);
+  var err = document.getElementById(errId);
+
+  if (!el || !err) return true;
+
+  if (invalid) {
+    el.classList.add('err');
+    err.classList.add('show');
+    return false;
+  }
+
+  el.classList.remove('err');
+  err.classList.remove('show');
+  return true;
+}
+
+window.submitApplication = function () {
+  var first    = document.getElementById('afFirst')?.value.trim() || '';
+  var last     = document.getElementById('afLast')?.value.trim() || '';
+  var email    = document.getElementById('afEmail')?.value.trim() || '';
+  var field    = document.getElementById('afField')?.value || '';
+  var position = document.getElementById('afPosition')?.value.trim() || '';
+  var message  = document.getElementById('afMessage')?.value.trim() || '';
+  var cv       = document.getElementById('afCv')?.files[0];
+  var consent  = document.getElementById('afConsent')?.checked;
+
+  var ok = true;
+
+  ok = setErr('afFirst','err-first', first.length < 2) && ok;
+  ok = setErr('afLast','err-last', last.length < 2) && ok;
+  ok = setErr('afEmail','err-email', !/^\S+@\S+\.\S+$/.test(email)) && ok;
+  ok = setErr('afField','err-field', !field) && ok;
+  ok = setErr('afPosition','err-position', position.length < 3) && ok;
+  ok = setErr('afMessage','err-message', message.length < 20) && ok;
+
+  if (!ok) return;
+
+  document.getElementById('careerFormFields').style.display = 'none';
+  document.getElementById('careerSuccess').classList.add('show');
+};
+
+window.resetForm = function () {
+  ['afFirst','afLast','afEmail','afPosition','afMessage'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.value = '';
+      el.classList.remove('err');
+    }
+  });
+};
+
+/* init */
+initJobs();
+
 });
+/* ── COMPANY PAGE ── */
+
+/* Tabs */
+window.showTab = function (tabId, btn) {
+  document.querySelectorAll('.tab-pane').forEach(function (el) {
+    el.classList.remove('active');
+    el.style.display = 'none';
+  });
+
+  document.querySelectorAll('.company-nav-btn').forEach(function (b) {
+    b.classList.remove('active');
+  });
+
+  var target = document.getElementById('tab-' + tabId);
+  if (!target) return;
+
+  target.style.display = 'block';
+  target.classList.add('active');
+
+  if (btn) btn.classList.add('active');
+
+  if (tabId !== 'leadership') resetLeadership();
+};
+
 /* Init tabs */
-/* ============================================================
-   INIT COMPANY TABS
-============================================================ */
 function initCompanyTabs() {
   var panes = document.querySelectorAll('.tab-pane');
-  if (!panes.length) return;
+  if (!panes.length) return; // ⚠️ évite bug sur autres pages
 
   panes.forEach(function (el) {
     el.style.display = 'none';
@@ -3623,9 +2774,7 @@ function initCompanyTabs() {
   }
 }
 
-/* ============================================================
-   LEADERSHIP TOGGLE
-============================================================ */
+/* Leadership toggle */
 window.toggleFullMessage = function () {
   var preview = document.getElementById('ld-preview');
   var full    = document.getElementById('ld-full-message');
@@ -3648,6 +2797,7 @@ window.toggleFullMessage = function () {
   }
 };
 
+/* Reset leadership */
 function resetLeadership() {
   var preview = document.getElementById('ld-preview');
   var full    = document.getElementById('ld-full-message');
@@ -3661,158 +2811,5 @@ function resetLeadership() {
   readBtn.style.display = '';
 }
 
+/* Init */
 initCompanyTabs();
-
-/* ============================================================
-   SUBSCRIPTION PAGE (FIXED VERSION)
-============================================================ */
-function initSubscription() {
-
-  if (!document.getElementById('form-step-1')) return;
-
-  var selectedPlan  = null;
-  var selectedPrice = 0;
-  var stepSub       = 1; // ✅ renommé pour éviter conflit
-  var countdownTimerSub = null;
-
-  /* PLAN */
-  window.selectPlan = function(name, price) {
-    selectedPlan  = name;
-    selectedPrice = price;
-
-    ['basic','plus','premium'].forEach(function(p) {
-      var el = document.getElementById('plan-' + p);
-      if (el) el.classList.remove('selected');
-
-      var radio = document.querySelector('#plan-' + p + ' input[type="radio"]');
-      if (radio) radio.checked = false;
-    });
-
-    var card = document.getElementById('plan-' + name.toLowerCase());
-    if (card) {
-      card.classList.add('selected');
-      var radio = card.querySelector('input[type="radio"]');
-      if (radio) radio.checked = true;
-    }
-
-    updateSummary();
-  };
-
-  function formatDZDSub(n) {
-    return n.toLocaleString('fr-DZ', { minimumFractionDigits: 2 }) + ' DZD';
-  }
-
-  function updateSummary() {
-    var planNameEl = document.getElementById('sum-plan-name');
-    if (!planNameEl) return;
-
-    var annualEl = document.getElementById('sum-annual');
-    var totalEl  = document.getElementById('sum-total-step1');
-
-    if (selectedPlan) {
-      planNameEl.textContent = selectedPlan;
-      annualEl.textContent   = formatDZDSub(selectedPrice);
-      totalEl.textContent    = formatDZDSub(selectedPrice);
-    } else {
-      planNameEl.textContent = '— Select a plan above —';
-    }
-  }
-
-  /* STEP NAV */
-  window.goToStepSub = function(n) {
-    if (n < 1 || n > 4) return;
-
-    document.getElementById('form-step-' + stepSub)?.classList.add('hidden');
-    stepSub = n;
-    document.getElementById('form-step-' + stepSub)?.classList.remove('hidden');
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /* VALIDATION */
-  function validateStep1Sub() {
-    var plate = document.getElementById('license_plate')?.value.trim();
-
-    if (!plate) {
-      alert('Please enter your license plate number.');
-      return false;
-    }
-    if (!selectedPlan) {
-      alert('Please select a plan.');
-      return false;
-    }
-    return true;
-  }
-
-  function validateStep2Sub() {
-    var email = document.getElementById('email')?.value.trim();
-    var conf  = document.getElementById('confirm_email')?.value.trim();
-
-    if (!email) {
-      alert('Enter email');
-      return false;
-    }
-    if (email !== conf) {
-      alert('Emails do not match');
-      return false;
-    }
-    return true;
-  }
-
-  /* PAYMENT */
-  window.validatePaymentSub = function() {
-    var card = document.getElementById('card_number')?.value.replace(/\s/g,'');
-
-    if (!card || card.length < 16) {
-      alert('Invalid card');
-      return;
-    }
-
-    goToStepSub(4);
-  };
-
-  /* INIT DEFAULT PLAN */
-  window.selectPlan('Plus', 7900);
-}
-
-initSubscription();
-
-/* ============================================================
-   INSURANCE SIDEBAR (FIXED)
-============================================================ */
-function initInsuranceSidebar() {
-
-  if (!document.getElementById('d-cpm')) return;
-
-  var ids = ['cpm', 'it', 'car'];
-
-  var labels = {
-    'cpm': "Contractors' Plant & Machinery",
-    'it':  'IT All Risks Insurance',
-    'car': 'Construction & Erection All Risks'
-  };
-
-  window.showInsurance = function (k, btn) {
-
-    ids.forEach(function(i) {
-      var el = document.getElementById('d-' + i);
-      if (el) el.classList.remove('on');
-    });
-
-    document.querySelectorAll('.sidebar-btn').forEach(function(b) {
-      b.classList.remove('active');
-    });
-
-    var target = document.getElementById('d-' + k);
-    if (target) target.classList.add('on');
-
-    if (btn) btn.classList.add('active');
-
-    var bc = document.getElementById('bc');
-    if (bc && labels[k]) {
-      bc.textContent = labels[k];
-    }
-  };
-}
-
-initInsuranceSidebar();
