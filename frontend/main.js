@@ -117,6 +117,9 @@
       if (langDropdown) langDropdown.classList.add('lang-open');
       if (langToggle)   langToggle.setAttribute('aria-expanded', 'true');
     }
+
+
+    
     function closeLang() {
       if (!langMenu) return;
       langMenu.classList.remove('show');
