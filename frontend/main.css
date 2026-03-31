@@ -1886,3 +1886,478 @@ textarea     { font-family: var(--font-sans); }
   .overview-stats { flex-direction: column; }
   .ld-profile-card { flex-direction: column; align-items: flex-start; }
 }
+/* 9k. NETWORK PAGE */
+/* ==========================================================================
+   9k. NETWORK PAGE — merged from network.css
+   ─────────────────────────────────────────────────────────────────────────
+   SETUP REQUIRED: add class="network-page" to <body> in network.html
+   e.g. <body class="network-page">
+
+   Rules are classified into three groups:
+     A) Scoped under .network-page  → avoids conflicts with other pages
+     B) Globally safe               → unique selectors / IDs, no conflict risk
+     C) DROPPED                     → duplicates already in main.css
+   ========================================================================== */
+
+
+/* ── A. HERO SECTION ──────────────────────────────────────────────────────
+   network.html uses .network-hero
+   main.css uses  .network-hero-section (different class → conflict if unscoped)
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .network-hero {
+  background: var(--orange-bg);
+  padding: 40px 60px 36px;
+  border-bottom: 1px solid #e8c99a;
+}
+.network-page .network-hero h2 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--dark);
+  line-height: 1.25;
+}
+.network-page .network-hero p {
+  font-size: 0.88rem;
+  color: #555;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  max-width: 340px;
+}
+
+/* ── A. LOCATE BUTTON — loading state ────────────────────────────────────
+   main.css has base .s-locate-btn styles; only the loading variant is missing
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .s-locate-btn.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+.network-page .s-locate-btn.loading svg {
+  animation: spin 1s linear infinite;
+  /* reuses @keyframes spin already defined in main.css section 11 */
+}
+
+
+/* ── B. HERO MAP ZOOM CONTROLS ───────────────────────────────────────────
+   ID selector — globally safe, no conflict possible
+   ──────────────────────────────────────────────────────────────────────── */
+
+#heroMap .leaflet-control-zoom {
+  margin: 8px !important;
+}
+#heroMap .leaflet-control-zoom a {
+  width: 22px !important;
+  height: 22px !important;
+  line-height: 22px !important;
+  font-size: 13px !important;
+}
+
+
+/* ── B. AUTOCOMPLETE ICON ────────────────────────────────────────────────
+   main.css has .auto-name and .auto-sub but is missing .auto-ico
+   ──────────────────────────────────────────────────────────────────────── */
+
+.auto-ico {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+
+/* ── A. LEGACY GRID SYSTEM ───────────────────────────────────────────────
+   .network-grid / .left-panel — older layout classes not in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .network-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  height: calc(100vh - 230px);
+  min-height: 520px;
+}
+.network-page .left-panel {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--white);
+}
+.network-page .count-bar {
+  padding: 8px 18px;
+  font-size: 0.72rem;
+  color: var(--gray);
+  border-bottom: 1px solid var(--border);
+  background: #fafafa;
+  flex-shrink: 0;
+}
+.network-page .count-bar strong { color: var(--orange); }
+
+.network-page .agency-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.network-page .agency-list::-webkit-scrollbar { width: 4px; }
+.network-page .agency-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+
+/* ── A. AGENCY CARD — map / list version ────────────────────────────────
+   CONFLICT: main.css section 9d has .agency-card for subscription forms.
+   Scoping under .network-page prevents the two from colliding.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .agency-card {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  border-left: 3px solid transparent;
+}
+.network-page .agency-card:hover { background: var(--orange-lt); }
+.network-page .agency-card.active {
+  background: #fff8f0;
+  border-left-color: var(--orange);
+}
+
+/* Inner elements — unique selectors, no main.css equivalents */
+.ag-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.ag-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex: 1;
+  margin-right: 8px;
+  line-height: 1.3;
+}
+.ag-code-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--orange);
+  background: var(--orange-lt);
+  padding: 2px 7px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.ag-addr {
+  font-size: 0.68rem;
+  color: var(--gray);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.ag-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: #444;
+  margin-bottom: 8px;
+}
+.ag-phone-row svg {
+  width: 10px; height: 10px;
+  stroke: var(--orange);
+  fill: none;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+.ag-btns { display: flex; gap: 6px; }
+.ag-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.67rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.14s;
+  border: 1.5px solid;
+}
+.ag-btn-map  { background: var(--white); color: var(--dark);   border-color: var(--border); }
+.ag-btn-map:hover { border-color: var(--orange); color: var(--orange); }
+.ag-btn-call { background: var(--orange); color: var(--white); border-color: var(--orange); }
+.ag-btn-call:hover { background: var(--orange-dark); }
+
+
+/* ── A. NO-RESULTS — legacy class ───────────────────────────────────────
+   main.css has .filter-no-results; this .no-results is a separate older class
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .no-results {
+  display: none;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--gray);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+.network-page .no-results.show { display: block; }
+
+
+/* ── A. SIDEBAR PDF BLOCK ────────────────────────────────────────────────
+   Small PDF download block inside the left panel — not in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .pdf-section {
+  padding: 13px 16px;
+  border-top: 1px solid var(--border);
+  background: #fafafa;
+  flex-shrink: 0;
+}
+.network-page .pdf-heading { font-size: 0.73rem; font-weight: 700; margin-bottom: 3px; }
+.network-page .pdf-sub     { font-size: 0.63rem; color: var(--gray); margin-bottom: 8px; }
+.network-page .pdf-btns    { display: flex; flex-wrap: wrap; gap: 5px; }
+.network-page .pdf-btn {
+  padding: 5px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.63rem;
+  font-weight: 600;
+  color: var(--dark);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.14s;
+  font-family: var(--font-sans);
+}
+.network-page .pdf-btn:hover { border-color: var(--orange); color: var(--orange); }
+.network-page .pdf-btn svg   { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+
+/* ── A. MAP PANEL ────────────────────────────────────────────────────────
+   Not in main.css. #agencyMap ID is globally safe.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.network-page .map-panel { position: relative; }
+
+#agencyMap { width: 100%; height: 100%; z-index: 1; }
+
+.network-page .map-badge {
+  position: absolute;
+  top: 14px; left: 14px;
+  z-index: 500;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.10);
+  pointer-events: none;
+}
+.network-page .map-badge strong { color: var(--orange); }
+
+
+/* ── B. POPUP PHONE LINE ─────────────────────────────────────────────────
+   main.css has .popup-addr but is missing .popup-ph
+   ──────────────────────────────────────────────────────────────────────── */
+
+.popup-ph {
+  font-size: 0.71rem;
+  color: var(--dark);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+
+/* ── B. FILTER CARD INNER ELEMENTS ──────────────────────────────────────
+   main.css has the outer .filter-card shell; these inner .fc-* classes are missing
+   ──────────────────────────────────────────────────────────────────────── */
+
+.fc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.fc-name {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--dark);
+  flex: 1;
+  margin-right: 6px;
+  line-height: 1.3;
+}
+.fc-code {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--orange);
+  background: var(--orange-lt);
+  padding: 2px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.fc-wilaya {
+  font-size: 0.69rem;
+  color: var(--gray);
+  margin-bottom: 5px;
+}
+.fc-phone {
+  font-size: 0.72rem;
+  color: var(--dark);
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fc-phone-icon { font-size: 11px; }
+.fc-hours {
+  font-size: 0.68rem;
+  color: var(--gray);
+  margin-bottom: 9px;
+  line-height: 1.4;
+}
+.fc-btns { display: flex; gap: 6px; }
+.fc-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.14s;
+  border: 1.5px solid;
+}
+/* map / call / dir variants — all unique, no main.css equivalents */
+.fc-btn-map { background: var(--white); color: var(--dark);   border-color: var(--border); }
+.fc-btn-map:hover { border-color: var(--orange); color: var(--orange); }
+.fc-btn-call { background: var(--orange); color: var(--white); border-color: var(--orange); }
+.fc-btn-call:hover { background: var(--orange-dark); }
+.fc-btn-dir { background: var(--white); color: var(--dark); border-color: var(--border); }
+.fc-btn-dir:hover { border-color: var(--orange); color: var(--orange); }
+
+
+/* ── B. SERVICE CHIPS + DIRECTOR LINE ───────────────────────────────────
+   Not in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.fc-services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.fc-service-tag {
+  font-size: 0.58rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: #f0f0f0;
+  color: var(--gray);
+}
+.fc-director {
+  font-size: 0.65rem;
+  color: #888;
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+
+/* ── B. FILTER MAP HINT ──────────────────────────────────────────────────
+   Not in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.filter-map-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #999;
+  font-size: 0.8rem;
+  font-style: italic;
+  pointer-events: none;
+  z-index: 2;
+  line-height: 1.6;
+  display: none;
+}
+
+
+/* ── B. FILTER SEARCH ICON SVG ───────────────────────────────────────────
+   main.css has .fd-search-wrap but the SVG icon class is missing
+   NOTE: .fd-search-input:focus { border-color:transparent } from network.css
+         is intentionally DROPPED — it would kill the orange focus ring from
+         .fd-search-wrap:focus-within defined in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.fd-search-ico {
+  width: 13px; height: 13px;
+  stroke: #999;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+
+/* ── B. WILAYA ITEMS WITH AGENCIES ──────────────────────────────────────
+   Not in main.css
+   ──────────────────────────────────────────────────────────────────────── */
+
+.fd-has-agency {
+  font-weight: 600;
+  color: var(--dark);
+}
+
+
+/* ── B. PDF DOWNLOADS — label wrapper + info wrapper ────────────────────
+   main.css has the outer section but is missing these two wrappers
+   ──────────────────────────────────────────────────────────────────────── */
+
+.pdf-downloads-left {
+  flex-shrink: 0;
+  min-width: 200px;
+}
+.pdf-dl-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
+/* ── DROPPED RULES — reason noted ────────────────────────────────────────
+   html, body { height: 100% }
+     → Would break all other pages. Leaflet does not require it.
+
+   .mobile-nav / .mobile-nav.open (network.css version)
+     → Uses right:-280px / right:0 animation.
+       main.css uses transform:translateX — same visual, keep main.css version.
+
+   .fd-search-input:focus { border-color: transparent }
+     → Conflicts with .fd-search-wrap:focus-within orange ring in main.css.
+
+   All footer-* rules inside network.css
+     → Exact duplicates of main.css section 10.
+
+   All other duplicates listed in Step 1 & 2 audit
+     → Already present in main.css with identical values.
+   ──────────────────────────────────────────────────────────────────────── */
+
+
+/* ── RESPONSIVE OVERRIDES — network-page only ────────────────────────────
+   Only rules that apply to unique selectors above.
+   General filter-grid, pdf-downloads responsive is already in main.css §12.
+   ──────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .network-page .network-hero        { padding: 28px 28px 24px; }
+  .network-page .network-hero p      { max-width: 100%; }
+  .network-page .network-grid        { grid-template-columns: 300px 1fr; height: calc(100vh - 200px); }
+}
+
+@media (max-width: 768px) {
+  .network-page .network-hero        { padding: 20px 16px; }
+  .network-page .network-hero h2     { font-size: 1.15rem; }
+  .network-page .network-hero p      { font-size: 0.82rem; }
+  .network-page .network-grid        { grid-template-columns: 1fr; height: auto; }
+  .network-page .agency-card         { padding: 12px 14px; }
+  .network-page .fc-name             { font-size: 0.78rem; }
+  .network-page .fc-btns             { flex-wrap: wrap; gap: 5px; }
+  .network-page .fc-btn              { font-size: 0.66rem; padding: 5px 10px; }
+}
+
+@media (max-width: 480px) {
+  .network-page .network-hero h2     { font-size: 1rem; }
+}
