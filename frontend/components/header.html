@@ -485,6 +485,336 @@ searchBtn.addEventListener('click', function () {
   font-size: 0.95rem;
   outline: none;
 }
+/* ==========================================================================
+   HEADER.CSS — Navigation desktop + mobile drawer
+   Projet : CAAR Assurances
+   Contenu :
+     1. Variables utilisées par le header (subset de :root)
+     2. Layout header (.right-side, .top-row, .bottom-row)
+     3. Bouton CTA top (.btn-top)
+     4. Séparateurs (.top-divider, .divider)
+     5. Navigation desktop (.nav-links, .nav-link, .arrow)
+     6. Dropdown menu (.dropdown, .dropdown-menu)
+     7. Icônes nav (.nav-icons, .icon-btn, .icon-img, .lang-label)
+     8. Mobile menu button (.mobile-menu-btn)
+     9. Mobile nav overlay (.mobile-nav-overlay)
+    10. Mobile nav drawer (.mobile-nav, .mobile-nav-header, etc.)
+    11. Media queries header (≤768px, ≤480px)
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. LAYOUT HEADER
+   ========================================================================== */
+
+.right-side {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.top-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 14px 20px;
+}
+
+.bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+
+/* ==========================================================================
+   2. BOUTON CTA TOP (.btn-top)
+   ========================================================================== */
+
+.btn-top {
+  padding: 9px 24px;
+  background: var(--hdr-orange);
+  border: 2px solid var(--hdr-orange);
+  border-radius: var(--btn-radius);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-block;
+  cursor: pointer;
+  transition: background .2s, border-color .2s, transform .15s;
+}
+.btn-top:hover {
+  background: #e06d00;
+  border-color: #e06d00;
+  transform: translateY(-1px);
+}
+
+
+/* ==========================================================================
+   3. SÉPARATEURS
+   ========================================================================== */
+
+.top-divider,
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+
+/* ==========================================================================
+   4. NAVIGATION DESKTOP
+   ========================================================================== */
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  flex: 1;
+  justify-content: space-between;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dark);
+  position: relative;
+  transition: color .2s;
+  white-space: nowrap;
+}
+.nav-link:hover,
+.nav-link.active {
+  color: var(--hdr-orange);
+}
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  background: var(--hdr-orange);
+  border-radius: 3px 3px 0 0;
+}
+
+.arrow {
+  font-size: 14px;
+  color: var(--hdr-orange);
+  font-weight: 700;
+  transition: transform .2s;
+}
+
+
+/* ==========================================================================
+   5. DROPDOWN MENU
+   ========================================================================== */
+
+.dropdown {
+  position: relative;
+  list-style: none;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 200px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.12);
+  list-style: none;
+  padding: 6px 0;
+  z-index: 999;
+}
+.dropdown:hover .dropdown-menu { display: block; }
+.dropdown:hover .arrow         { transform: rotate(180deg); }
+
+.dropdown-menu li a {
+  display: block;
+  padding: 11px 20px;
+  font-size: 13px;
+  color: var(--dark);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background .15s, color .15s;
+}
+.dropdown-menu li:last-child a { border-bottom: none; }
+.dropdown-menu li a:hover      { background: #fff5e6; color: var(--hdr-orange); }
+
+
+/* ==========================================================================
+   6. ICÔNES NAVIGATION DROITE
+   ========================================================================== */
+
+.nav-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background .2s;
+}
+.icon-btn:hover { background: #f5f5f5; }
+
+.icon-img   { width: 26px; height: 26px; object-fit: contain; }
+.lang-label { font-size: 13px; font-weight: 700; color: var(--dark); }
+
+
+/* ==========================================================================
+   7. MOBILE — BOUTON HAMBURGER
+   ========================================================================== */
+
+.mobile-menu-btn {
+  display: none; /* affiché via media query ci-dessous */
+}
+
+
+/* ==========================================================================
+   8. MOBILE — OVERLAY (fond semi-transparent)
+   ========================================================================== */
+
+.mobile-nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1100;
+  cursor: pointer;
+}
+.mobile-nav-overlay.open { display: block; }
+
+
+/* ==========================================================================
+   9. MOBILE — DRAWER (panneau latéral)
+   ========================================================================== */
+
+.mobile-nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  background: var(--white);
+  z-index: 1200;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+}
+.mobile-nav.open {
+  transform: translateX(0);
+}
+
+.mobile-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mobile-nav-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--dark);
+}
+
+.mobile-nav-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--gray);
+  padding: 4px;
+  line-height: 1;
+}
+
+.mobile-nav a {
+  display: block;
+  padding: 14px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--dark);
+  border-bottom: 1px solid #f5f5f5;
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+}
+.mobile-nav a:hover,
+.mobile-nav a.active {
+  color: var(--hdr-orange);
+  background: #fff8f2;
+}
+
+.mobile-nav-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-btns .btn-top {
+  text-align: center;
+  border-radius: var(--btn-radius);
+  font-size: 0.84rem;
+  padding: 10px;
+  display: block;
+}
+
+
+/* ==========================================================================
+   10. MEDIA QUERIES — HEADER
+   ========================================================================== */
+
+/* ---- Tablet ≤1024px ---- */
+@media (max-width: 1024px) {
+  .header-inner { padding: 0 20px; }
+  .logo-img     { width: 100px; height: 100px; }
+  .top-row      { padding: 8px 0 8px 16px; }
+}
+
+/* ---- Mobile ≤768px ---- */
+@media (max-width: 768px) {
+  /* Cacher la nav desktop et la top bar */
+  .nav-links,
+  .top-row,
+  .top-divider,
+  .divider   { display: none; }
+
+  /* Afficher le bouton hamburger */
+  .mobile-menu-btn { display: flex !important; }
+
+  /* Adapter le layout */
+  .bottom-row   { justify-content: flex-end; padding: 8px 0; height: auto; }
+  .header-inner { padding: 0 16px; flex-wrap: wrap; }
+  .logo-block   { border-right: 1px solid var(--border); padding: 8px 12px 8px 0; }
+  .logo-img     { width: 72px; height: 72px; }
+}
+
+/* ---- Small mobile ≤480px ---- */
+@media (max-width: 480px) {
+  .logo-img { width: 48px; height: 48px; }
+}
 </style>
 </body>
 </html>
