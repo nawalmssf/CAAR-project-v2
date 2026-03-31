@@ -32,7 +32,7 @@
    0. IMPORT HEADER
    ========================================================================== */
 
-@import './header.css';
+@import '.componen/header.html';
 
 
 /* ==========================================================================
@@ -119,7 +119,7 @@ textarea     { font-family: var(--font-sans); }
 .btn-primary {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 12px 28px;
-  background:#F57C00; color: #fff;
+  background: var(--orange); color: #fff;
   border: 2px solid var(--orange);
   border-radius: var(--btn-radius);
   font-family: var(--font-sans); font-size: .88rem; font-weight: 700;
@@ -555,198 +555,13 @@ textarea     { font-family: var(--font-sans); }
 .btn-detail-secondary:hover { border-color: var(--orange); color: var(--orange); }
 
 
-/* =====================================================================
-   9. PAGE SECTIONS
-   ===================================================================== */
-/* ============================================================
-   UNIFIED HERO SYSTEM v1.0
-   Replaces: .hero, .product-hero, .products-hero, .news-hero,
-   .article-hero, .contact-hero, .about-hero, .careers-hero
-   ============================================================ */
-
-.caar-hero {
-  background: var(--white);
-  border-bottom: 2px solid #000;
-  padding: 0 7%;
-  overflow: hidden;
-  position: relative;
-  min-height: 260px;
-}
-
-.caar-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, #e8d4b8 1px, transparent 1px);
-  background-size: 28px 28px;
-  opacity: 0.18;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.caar-hero__inner {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 48px;
-  align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 28px 0 0;
-  min-height: 280px;
-}
-
-.caar-hero__text {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-bottom: 52px;
-}
-
-.caar-hero__tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--hdr-orange);
-  background: var(--orange-lt);
-  border: 1px solid #f0dcc8;
-  padding: 5px 14px;
-  border-radius: 20px;
-  width: fit-content;
-
-}
-
-.caar-hero__tag::before {
-  content: '✦';
-  font-size: 0.6rem;
-}
-
-.caar-hero__title {
-  font-family: var(--font-serif);
-  font-size: 2.6rem;
-  font-weight: 700;
-  color: var(--dark);
-  line-height: 1.15;
-  margin: 0;
-}
-
-.caar-hero__subtitle {
-  font-size: 1rem;
-  color: var(--gray);
-  line-height: 1.7;
-  max-width: 480px;
-  margin: 0;
-}
-
-.caar-hero__actions {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-}
-
-.caar-hero__image {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  height: 100%;
-}
-
-.caar-hero__image img {
-  height: 260px;
-  width: auto;
-  object-fit: contain;
-  display: block;
-}
-
-/* -- Modifier: no image (article pages) -- */
-.caar-hero--no-image .caar-hero__inner {
-  grid-template-columns: 1fr;
-  max-width: 800px;
-}
-
-.caar-hero--no-image .caar-hero__text {
-  padding-bottom: 40px;
-}
-
-/* -- Modifier: home page -- */
-.caar-hero--home .caar-hero__title {
-  font-size: 3rem;
-}
-
-.caar-hero--home .caar-hero__inner {
-  grid-template-columns: 1fr 420px;
-  min-height: 340px;
-}
-
-.caar-hero--home .caar-hero__image img {
-  height: 340px;
-}
-.caar-hero--home .caar-hero__inner {
-  padding-bottom: 0;
-}
-.hero-bottom {
-  position: relative;
-  z-index: 1;
-    padding: 12px 22px;   /* smaller inside space */
-  display: flex;
-  justify-content: center;
-  padding: 0 0 32px;
-    min-width: 360px;     /* instead of full width */ 
-}
-
-/* -- Responsive -- */
-@media (max-width: 1024px) {
-  .caar-hero__inner {
-    grid-template-columns: 60% 40%;
-    gap: 32px;
-  }
-  .caar-hero__title { font-size: 2.2rem; }
-}
-
-@media (max-width: 768px) {
-  .caar-hero { padding: 0 16px; min-height: auto; }
-  .caar-hero__inner {
-    grid-template-columns: 1fr;
-    padding: 36px 0 0;
-    gap: 0;
-    min-height: auto;
-  }
-  .caar-hero__image { display: none; }
-  .caar-hero__text { padding-bottom: 32px; }
-  .caar-hero__title { font-size: 1.8rem; }
-  .caar-hero--home .caar-hero__title { font-size: 2rem; }
-  .caar-hero--home .caar-hero__inner { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 480px) {
-  .caar-hero__title { font-size: 1.5rem; }
-  .caar-hero__subtitle { font-size: 0.9rem; }
-}
-/* ---- 9a. HOME ---- */
 /* ==========================================================================
    9a. PAGE D'ACCUEIL
    ========================================================================== */
 
 /* ---- Hero ---- */
 .hero { background: #fff; position: relative; overflow: hidden; padding: 0 48px; border-bottom: 1px solid var(--border); }
-.hero-deco {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  width: 55%;
-  max-width: 650px;
-  opacity: 0.5;
-  z-index: 0;
-  pointer-events: none;
-}
-
+.hero-deco { position: absolute; bottom: 80px; left: 20px; width: 55%; max-width: 650px; opacity: .5; z-index: 0; pointer-events: none; }
 .hero-top { display: flex; align-items: flex-end; justify-content: space-between; position: relative; z-index: 1; }
 .hero-left { flex: 1; padding: 50px 40px 30px 0; display: flex; flex-direction: column; gap: 20px; }
 .hero-title    { font-size: 2rem; font-weight: 800; color: var(--dark); line-height: 1.3; }
