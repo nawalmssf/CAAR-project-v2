@@ -1887,22 +1887,9 @@ textarea     { font-family: var(--font-sans); }
   .ld-profile-card { flex-direction: column; align-items: flex-start; }
 }
 /* 9k. NETWORK PAGE */
-/* ==========================================================================
-   9k. NETWORK PAGE — merged from network.css
-   ─────────────────────────────────────────────────────────────────────────
-   SETUP REQUIRED: add class="network-page" to <body> in network.html
-   e.g. <body class="network-page">
-
-   Rules are classified into three groups:
-     A) Scoped under .network-page  → avoids conflicts with other pages
-     B) Globally safe               → unique selectors / IDs, no conflict risk
-     C) DROPPED                     → duplicates already in main.css
-   ========================================================================== */
 
 
 /* ── A. HERO SECTION ──────────────────────────────────────────────────────
-   network.html uses .network-hero
-   main.css uses  .network-hero-section (different class → conflict if unscoped)
    ──────────────────────────────────────────────────────────────────────── */
 
 .network-page .network-hero {
@@ -1911,11 +1898,14 @@ textarea     { font-family: var(--font-sans); }
   border-bottom: 1px solid #e8c99a;
 }
 .network-page .network-hero h2 {
-  font-size: 1.45rem;
+   font-family: var(--font-serif);
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--dark);
+  line-height: 1.15;
+
   font-weight: 800;
   margin-bottom: 8px;
-  color: var(--dark);
-  line-height: 1.25;
 }
 .network-page .network-hero p {
   font-size: 0.88rem;
@@ -1940,7 +1930,6 @@ textarea     { font-family: var(--font-sans); }
 
 
 /* ── B. HERO MAP ZOOM CONTROLS ───────────────────────────────────────────
-   ID selector — globally safe, no conflict possible
    ──────────────────────────────────────────────────────────────────────── */
 
 #heroMap .leaflet-control-zoom {
@@ -1955,17 +1944,13 @@ textarea     { font-family: var(--font-sans); }
 
 
 /* ── B. AUTOCOMPLETE ICON ────────────────────────────────────────────────
-   main.css has .auto-name and .auto-sub but is missing .auto-ico
    ──────────────────────────────────────────────────────────────────────── */
 
 .auto-ico {
   font-size: 13px;
   flex-shrink: 0;
 }
-
-
 /* ── A. LEGACY GRID SYSTEM ───────────────────────────────────────────────
-   .network-grid / .left-panel — older layout classes not in main.css
    ──────────────────────────────────────────────────────────────────────── */
 
 .network-page .network-grid {
@@ -1999,10 +1984,7 @@ textarea     { font-family: var(--font-sans); }
 .network-page .agency-list::-webkit-scrollbar { width: 4px; }
 .network-page .agency-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
 
-
 /* ── A. AGENCY CARD — map / list version ────────────────────────────────
-   CONFLICT: main.css section 9d has .agency-card for subscription forms.
-   Scoping under .network-page prevents the two from colliding.
    ──────────────────────────────────────────────────────────────────────── */
 
 .network-page .agency-card {
@@ -2163,7 +2145,6 @@ textarea     { font-family: var(--font-sans); }
 
 
 /* ── B. FILTER CARD INNER ELEMENTS ──────────────────────────────────────
-   main.css has the outer .filter-card shell; these inner .fc-* classes are missing
    ──────────────────────────────────────────────────────────────────────── */
 
 .fc-header {
@@ -2230,7 +2211,6 @@ textarea     { font-family: var(--font-sans); }
 
 
 /* ── B. SERVICE CHIPS + DIRECTOR LINE ───────────────────────────────────
-   Not in main.css
    ──────────────────────────────────────────────────────────────────────── */
 
 .fc-services {
@@ -2275,10 +2255,6 @@ textarea     { font-family: var(--font-sans); }
 
 
 /* ── B. FILTER SEARCH ICON SVG ───────────────────────────────────────────
-   main.css has .fd-search-wrap but the SVG icon class is missing
-   NOTE: .fd-search-input:focus { border-color:transparent } from network.css
-         is intentionally DROPPED — it would kill the orange focus ring from
-         .fd-search-wrap:focus-within defined in main.css
    ──────────────────────────────────────────────────────────────────────── */
 
 .fd-search-ico {
@@ -2315,25 +2291,6 @@ textarea     { font-family: var(--font-sans); }
   flex-direction: column;
   gap: 2px;
 }
-
-
-/* ── DROPPED RULES — reason noted ────────────────────────────────────────
-   html, body { height: 100% }
-     → Would break all other pages. Leaflet does not require it.
-
-   .mobile-nav / .mobile-nav.open (network.css version)
-     → Uses right:-280px / right:0 animation.
-       main.css uses transform:translateX — same visual, keep main.css version.
-
-   .fd-search-input:focus { border-color: transparent }
-     → Conflicts with .fd-search-wrap:focus-within orange ring in main.css.
-
-   All footer-* rules inside network.css
-     → Exact duplicates of main.css section 10.
-
-   All other duplicates listed in Step 1 & 2 audit
-     → Already present in main.css with identical values.
-   ──────────────────────────────────────────────────────────────────────── */
 
 
 /* ── RESPONSIVE OVERRIDES — network-page only ────────────────────────────
